@@ -36,8 +36,10 @@ def get_recommended_events(request):
 
     user_lat = request.session.get("user_lat")
     user_lng = request.session.get("user_lng")
-    user_budget = request.session.get("budget")
-    user_category = request.session.get("preferred_category")
+    # Use saved profile preferences as primary source.
+    # Session values are kept as fallback for older flows.
+    user_budget = None
+    user_category = None
     user_category_id = None
     user_category_name = None
 
@@ -47,9 +49,9 @@ def get_recommended_events(request):
     if request.user.is_authenticated:
         preferences = getattr(request.user, "preferences", None)
         if preferences:
-            if user_budget in (None, "") and preferences.budget is not None:
+            if preferences.budget is not None:
                 user_budget = float(preferences.budget)
-            if not user_category and preferences.favorite_category_id:
+            if preferences.favorite_category_id:
                 user_category_id = preferences.favorite_category_id
         purchased_tickets = (
             TicketPurchase.objects.filter(
@@ -62,6 +64,12 @@ def get_recommended_events(request):
         category_counts = Counter(ticket.event.category_id for ticket in purchased_tickets)
         if category_counts:
             max_category_count = max(category_counts.values())
+
+    if user_budget is None:
+        user_budget = request.session.get("budget")
+
+    if not user_category_id:
+        user_category = request.session.get("preferred_category")
 
     if user_category:
         if str(user_category).isdigit():
@@ -126,7 +134,7 @@ def get_recommended_events(request):
     # Sort descending
     scored_events.sort(key=lambda x: x[1], reverse=True)
 
-    #show the calculated score in the terminal for debugging
+    # show the calculated score in the terminal for debugging
     for event, score in scored_events:
         print(f"Event: {event.title}, Score: {score:.4f}")
     

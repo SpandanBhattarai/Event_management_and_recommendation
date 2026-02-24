@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="{% static 'css/style.css' %}">
 </head>
 <body>
+  <!--Navbar-->
 <nav class="navbar navbar-expand-lg fixed-top brand-nav navbar-dark">
   <div class="container">
     <a class="navbar-brand brand-name" href="{% url 'home' %}">EventMandu</a>
@@ -50,6 +51,7 @@
   </div>
 </nav>
 
+<!--Hero Section-->
 <main>
   <section class="hero-wrap">
     <div class="container">
@@ -70,6 +72,7 @@
     </div>
   </section>
 
+<!--Why choose us section-->
   <section class="section-space pt-4">
     <div class="container">
       <div class="text-center mb-4">
@@ -101,7 +104,7 @@
       </div>
     </div>
   </section>
-
+<!--Upcoming events section-->
   <section class="section-space pt-3">
     <div class="container">
       <div class="d-flex justify-content-between align-items-end mb-4">
@@ -131,8 +134,8 @@
       </div>
     </div>
   </section>
-
-  {% if user.is_authenticated %}
+<!--Recommended events section for logged in users-->
+  {% if user.is_authenticated %} 
   <section class="section-space pt-0">
     <div class="container">
       <h2 class="section-title mb-3">Recommended for You</h2>
@@ -157,6 +160,7 @@
   </section>
   {% endif %}
 
+<!--Call to action for unauthenticated users-->
   {% if not user.is_authenticated %}
   <section class="pb-5">
     <div class="container">
@@ -172,7 +176,7 @@
   </section>
   {% endif %}
 </main>
-
+<!--Footer-->
 <footer class="site-footer">
   <div class="container text-center">
     <h5 class="mb-2">EventMandu</h5>
@@ -186,10 +190,10 @@
       <a class="social-link" href="#" aria-label="Instagram"><i class="fa-brands fa-instagram"></i></a>
       <a class="social-link" href="#" aria-label="X"><i class="fa-brands fa-x-twitter"></i></a>
     </div>
-    <small>(c) 2026 EventMandu. Terms & Privacy.</small>
+    <small><i class="fa-regular fa-copyright"></i> 2026 EventMandu. Terms & Privacy.</small>
   </div>
 </footer>
-
+<!--Theme toggle script-->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
   (function () {
@@ -208,7 +212,7 @@
       });
     }
 
-    if (navigator.geolocation) {
+    if (navigator.geolocation) { // Get user's geoloaction to provide location-based recommendations
       navigator.geolocation.getCurrentPosition(function(position) {
         const latitude = position.coords.latitude;
         const longitude = position.coords.longitude;
