@@ -36,6 +36,7 @@
             <i class="fa-solid fa-user"></i> {{ user.username }}
           </button>
           <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="{% url 'profile_preferences' %}">Profile & Preferences</a></li>
             <li><a class="dropdown-item" href="{% url 'tickets' %}">My Tickets</a></li>
             <li><a class="dropdown-item" href="{% url 'logout' %}">Logout</a></li>
           </ul>

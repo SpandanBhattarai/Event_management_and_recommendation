@@ -33,5 +33,6 @@ urlpatterns = [
      path('buy-ticket/<int:event_id>/', views.buy_ticket, name='buy_ticket'),
      path('khalti/return/', views.khalti_return, name='khalti_return'),
      path('tickets/', views.tickets_view, name='tickets'),
+     path('profile/preferences/', views.profile_preferences_view, name='profile_preferences'),
 ]
 

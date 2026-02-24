@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>EventMandu | Venues</title>
+  <title>EventMandu | Profile & Preferences</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   <link rel="stylesheet" href="{% static 'css/style.css' %}">
 </head>
-<body>
+<body class="d-flex flex-column min-vh-100">
 <nav class="navbar navbar-expand-lg fixed-top brand-nav navbar-dark">
   <div class="container">
     <a class="navbar-brand brand-name" href="{% url 'home' %}">EventMandu</a>
@@ -21,16 +21,15 @@
     </button>
     <div class="collapse navbar-collapse" id="navbarNav">
       <ul class="navbar-nav mx-auto text-center">
-        <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'home' %}active{% endif %}" href="{% url 'home' %}">Home</a></li>
-        <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'events' %}active{% endif %}" href="{% url 'events' %}">Events</a></li>
-        <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'venues' %}active{% endif %}" href="{% url 'venues' %}">Venues</a></li>
-        <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'contact' %}active{% endif %}" href="{% url 'contact' %}">Contact</a></li>
+        <li class="nav-item"><a class="nav-link" href="{% url 'home' %}">Home</a></li>
+        <li class="nav-item"><a class="nav-link" href="{% url 'events' %}">Events</a></li>
+        <li class="nav-item"><a class="nav-link" href="{% url 'venues' %}">Venues</a></li>
+        <li class="nav-item"><a class="nav-link" href="{% url 'contact' %}">Contact</a></li>
       </ul>
       <div class="d-flex align-items-center gap-2 justify-content-center">
         <button class="btn btn-sm theme-toggle" id="themeToggle" type="button" aria-label="Toggle theme">
           <i class="fa-solid fa-moon"></i>
         </button>
-        {% if user.is_authenticated %}
         <div class="dropdown">
           <button class="btn btn-sm btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
             <i class="fa-solid fa-user"></i> {{ user.username }}
@@ -41,41 +40,61 @@
             <li><a class="dropdown-item" href="{% url 'logout' %}">Logout</a></li>
           </ul>
         </div>
-        {% else %}
-        <a class="btn btn-sm btn-light" href="{% url 'login' %}">Login</a>
-        <a class="btn btn-sm btn-outline-light" href="{% url 'register' %}">Sign Up</a>
-        {% endif %}
       </div>
     </div>
   </div>
 </nav>
 
-<main class="section-space pt-4">
+<main class="section-space pt-4 flex-grow-1">
   <div class="container">
-    <div class="d-flex justify-content-between align-items-end mb-4">
-      <div>
-        <h1 class="section-title mb-1">Explore Venues</h1>
-        <p class="section-subtitle mb-0">Browse trusted venues by city, capacity, and location details.</p>
-      </div>
-    </div>
-
-    <div class="row event-grid">
-      {% for venue in venues %}
-      <div class="col-lg-4 col-md-6">
-        <article class="event-card">
-          <h5 class="mb-2">{{ venue.name }}</h5>
-          <p class="event-meta mb-2"><i class="fa-solid fa-location-dot me-2"></i>{{ venue.city }}</p>
-          <p class="event-meta mb-2"><i class="fa-solid fa-road me-2"></i>{{ venue.address }}</p>
-          <p class="event-meta mb-2"><i class="fa-solid fa-users me-2"></i>Capacity: {{ venue.capacity }}</p>
-          <a href="{% url 'events' %}" class="btn btn-primary-brand btn-sm mt-2">View Events</a>
-        </article>
-      </div>
-      {% empty %}
-      <div class="col-12">
-        <div class="alert alert-info">No venues available right now.</div>
-      </div>
+    {% if messages %}
+    <div class="mb-3">
+      {% for message in messages %}
+      <div class="alert alert-{{ message.tags|default:'info' }} mb-2">{{ message }}</div>
       {% endfor %}
     </div>
+    {% endif %}
+
+    <section class="mx-auto" style="max-width: 820px;">
+      <h1 class="section-title mb-2">Profile & Preferences</h1>
+      <p class="section-subtitle mb-4">Update your profile and recommendation preferences.</p>
+      <article class="event-card">
+        <form method="post">
+          {% csrf_token %}
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label for="first_name" class="form-label">First Name</label>
+              <input id="first_name" name="first_name" type="text" class="form-control" value="{{ user.first_name }}">
+            </div>
+            <div class="col-md-6">
+              <label for="last_name" class="form-label">Last Name</label>
+              <input id="last_name" name="last_name" type="text" class="form-control" value="{{ user.last_name }}">
+            </div>
+            <div class="col-12">
+              <label for="email" class="form-label">Email</label>
+              <input id="email" name="email" type="email" class="form-control" value="{{ user.email }}">
+            </div>
+            <div class="col-md-6">
+              <label for="favorite_category" class="form-label">Favorite Category</label>
+              <select id="favorite_category" name="favorite_category" class="form-select">
+                <option value="">Select a category</option>
+                {% for category in categories %}
+                <option value="{{ category.id }}" {% if preferences.favorite_category_id == category.id %}selected{% endif %}>{{ category.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label for="budget" class="form-label">Budget (NPR)</label>
+              <input id="budget" name="budget" type="number" min="0" step="0.01" class="form-control" value="{{ preferences.budget|default_if_none:'' }}">
+            </div>
+          </div>
+          <div class="mt-4 d-flex gap-2">
+            <button type="submit" class="btn btn-primary-brand">Save Changes</button>
+            <a href="{% url 'events' %}" class="btn btn-outline-brand">Back to Events</a>
+          </div>
+        </form>
+      </article>
+    </section>
   </div>
 </main>
 

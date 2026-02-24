@@ -12,7 +12,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.urls import reverse
-from .models import Category, Event, TicketPurchase, Venue
+from .models import Category, Event, TicketPurchase, UserPreference, Venue
 from .recommendation import get_recommended_events
 
 
@@ -156,6 +156,57 @@ def recommended_events(request):
     events = get_recommended_events(request)
 
     return render(request, "recommended.html", {"events": events})
+
+
+@login_required
+def profile_preferences_view(request):
+    categories = Category.objects.order_by("name")
+    preferences, _ = UserPreference.objects.get_or_create(user=request.user)
+
+    if request.method == "POST":
+        request.user.first_name = request.POST.get("first_name", "").strip()
+        request.user.last_name = request.POST.get("last_name", "").strip()
+        request.user.email = request.POST.get("email", "").strip()
+        request.user.save(update_fields=["first_name", "last_name", "email"])
+
+        category_id = request.POST.get("favorite_category", "").strip()
+        budget_raw = request.POST.get("budget", "").strip()
+
+        preferences.favorite_category = None
+        if category_id:
+            preferences.favorite_category = Category.objects.filter(id=category_id).first()
+
+        preferences.budget = None
+        if budget_raw:
+            try:
+                budget_value = Decimal(budget_raw)
+                if budget_value < 0:
+                    raise InvalidOperation
+                preferences.budget = budget_value
+            except (InvalidOperation, TypeError):
+                messages.error(request, "Budget must be a valid non-negative number.")
+                return redirect("profile_preferences")
+
+        preferences.save()
+
+        if preferences.favorite_category:
+            request.session["preferred_category"] = str(preferences.favorite_category.id)
+        else:
+            request.session.pop("preferred_category", None)
+
+        if preferences.budget is not None:
+            request.session["budget"] = float(preferences.budget)
+        else:
+            request.session.pop("budget", None)
+
+        messages.success(request, "Profile and preferences updated.")
+        return redirect("profile_preferences")
+
+    return render(
+        request,
+        "profile_preferences.html",
+        {"categories": categories, "preferences": preferences},
+    )
 
 
 @login_required

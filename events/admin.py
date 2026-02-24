@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib import admin
 
-from .models import Category, Event, Venue
+from .models import Category, Event, UserPreference, Venue
 
 
 @admin.register(Venue)
@@ -25,3 +25,9 @@ class EventAdminForm(forms.ModelForm):
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
     form = EventAdminForm
+
+
+@admin.register(UserPreference)
+class UserPreferenceAdmin(admin.ModelAdmin):
+    list_display = ("user", "favorite_category", "budget", "updated_at")
+    search_fields = ("user__username", "user__email")

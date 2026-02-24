@@ -38,11 +38,19 @@ def get_recommended_events(request):
     user_lng = request.session.get("user_lng")
     user_budget = request.session.get("budget")
     user_category = request.session.get("preferred_category")
+    user_category_id = None
+    user_category_name = None
 
     # Learn user category preference from purchased ticket history.
     category_counts = Counter()
     max_category_count = 0
     if request.user.is_authenticated:
+        preferences = getattr(request.user, "preferences", None)
+        if preferences:
+            if user_budget in (None, "") and preferences.budget is not None:
+                user_budget = float(preferences.budget)
+            if not user_category and preferences.favorite_category_id:
+                user_category_id = preferences.favorite_category_id
         purchased_tickets = (
             TicketPurchase.objects.filter(
                 user=request.user,
@@ -55,12 +63,20 @@ def get_recommended_events(request):
         if category_counts:
             max_category_count = max(category_counts.values())
 
+    if user_category:
+        if str(user_category).isdigit():
+            user_category_id = int(user_category)
+        else:
+            user_category_name = str(user_category).strip().lower()
+
     for event in events:
 
         #Category Match
         category_score = 0
-        if user_category and event.category:
-            if event.category.name == user_category:
+        if event.category:
+            if user_category_id and event.category_id == user_category_id:
+                category_score = 1
+            elif user_category_name and event.category.name.lower() == user_category_name:
                 category_score = 1
 
         # History category boost based on user's completed purchases.
@@ -109,9 +125,9 @@ def get_recommended_events(request):
 
     # Sort descending
     scored_events.sort(key=lambda x: x[1], reverse=True)
-    
-# to show scores in the terminal for testing purposes
+
+    #show the calculated score in the terminal for debugging
     for event, score in scored_events:
         print(f"Event: {event.title}, Score: {score:.4f}")
-
+    
     return [event[0] for event in scored_events]
