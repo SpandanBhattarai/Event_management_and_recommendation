@@ -35,5 +35,14 @@ urlpatterns = [
      path('khalti/return/', views.khalti_return, name='khalti_return'),
      path('tickets/', views.tickets_view, name='tickets'),
      path('profile/preferences/', views.profile_preferences_view, name='profile_preferences'),
+     path('dashboard/admin/', views.admin_dashboard, name='admin_dashboard'),
+     path('dashboard/admin/events/<int:event_id>/approval/', views.admin_event_approval_action, name='admin_event_approval_action'),
+     path('dashboard/admin/users/<int:user_id>/role/', views.admin_user_role_action, name='admin_user_role_action'),
+     path('dashboard/admin/users/<int:user_id>/activation/', views.admin_user_activation_action, name='admin_user_activation_action'),
+     path('dashboard/organizer/', views.organizer_dashboard, name='organizer_dashboard'),
+     path('dashboard/organizer/events/create/', views.organizer_event_create, name='organizer_event_create'),
+     path('dashboard/organizer/events/<int:event_id>/edit/', views.organizer_event_edit, name='organizer_event_edit'),
+     path('dashboard/organizer/events/<int:event_id>/delete/', views.organizer_event_delete, name='organizer_event_delete'),
+     path('dashboard/organizer/events/<int:event_id>/attendees.csv', views.organizer_event_attendees_csv, name='organizer_event_attendees_csv'),
 ]
 

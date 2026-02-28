@@ -1,8 +1,9 @@
 from django import forms
 from django.contrib import admin
+from django.utils import timezone
 from django.utils.safestring import mark_safe
 
-from .models import Category, Event, UserPreference, Venue
+from .models import AuditLog, Category, Event, UserPreference, UserRole, Venue
 
 
 class VenueAdminForm(forms.ModelForm):
@@ -57,9 +58,50 @@ class EventAdminForm(forms.ModelForm):
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
     form = EventAdminForm
+    list_display = (
+        "title",
+        "organizer",
+        "approval_status",
+        "approved_by",
+        "venue",
+        "category",
+        "start_date",
+        "is_active",
+    )
+    list_filter = ("approval_status", "is_active", "category", "venue__city", "organizer")
+    search_fields = ("title", "description", "venue__name", "organizer__username")
+
+    def save_model(self, request, obj, form, change):
+        if not obj.organizer and request.user.is_authenticated:
+            obj.organizer = request.user
+        if obj.approval_status == Event.APPROVAL_APPROVED and not obj.approved_by:
+            obj.approved_by = request.user
+        if obj.approval_status == Event.APPROVAL_APPROVED and not obj.approved_at:
+            obj.approved_at = timezone.now()
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(UserPreference)
 class UserPreferenceAdmin(admin.ModelAdmin):
     list_display = ("user", "favorite_category", "budget", "updated_at")
     search_fields = ("user__username", "user__email")
+
+
+@admin.register(UserRole)
+class UserRoleAdmin(admin.ModelAdmin):
+    list_display = ("user", "role", "updated_at")
+    list_filter = ("role",)
+    search_fields = ("user__username", "user__email")
+
+
+@admin.register(AuditLog)
+class AuditLogAdmin(admin.ModelAdmin):
+    list_display = ("created_at", "actor", "action", "target_user", "event", "ticket_purchase")
+    list_filter = ("action", "created_at")
+    search_fields = (
+        "actor__username",
+        "target_user__username",
+        "event__title",
+        "ticket_purchase__purchase_order_id",
+    )
+    readonly_fields = ("actor", "action", "target_user", "event", "ticket_purchase", "details", "created_at")

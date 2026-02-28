@@ -3,6 +3,37 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 from django.conf import settings
 
 
+class UserRole(models.Model):
+    ROLE_ADMIN = "admin"
+    ROLE_ORGANIZER = "organizer"
+    ROLE_USER = "user"
+
+    ROLE_CHOICES = [
+        (ROLE_ADMIN, "Admin"),
+        (ROLE_ORGANIZER, "Organizer"),
+        (ROLE_USER, "User"),
+    ]
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="role_profile",
+    )
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default=ROLE_USER)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username} ({self.role})"
+
+    @property
+    def is_admin(self):
+        return self.role == self.ROLE_ADMIN
+
+    @property
+    def is_organizer(self):
+        return self.role == self.ROLE_ORGANIZER
+
+
 class Venue(models.Model):
     name = models.CharField(max_length=200)
     address = models.TextField()
@@ -21,8 +52,25 @@ class Category(models.Model):
         return self.name
 
 class Event(models.Model):  
+    APPROVAL_PENDING = "pending"
+    APPROVAL_APPROVED = "approved"
+    APPROVAL_REJECTED = "rejected"
+
+    APPROVAL_CHOICES = [
+        (APPROVAL_PENDING, "Pending"),
+        (APPROVAL_APPROVED, "Approved"),
+        (APPROVAL_REJECTED, "Rejected"),
+    ]
+
     title = models.CharField(max_length=200)
     description = models.TextField()
+    organizer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="organized_events",
+    )
     venue = models.ForeignKey(Venue, on_delete=models.CASCADE)
     category = models.ForeignKey(Category, on_delete=models.CASCADE, null=True)
     start_date = models.DateTimeField()
@@ -34,6 +82,20 @@ class Event(models.Model):
         validators=[MinValueValidator(1), MaxValueValidator(5)],
     )  # 1-5 scale
     is_active = models.BooleanField(default=True)
+    approval_status = models.CharField(
+        max_length=20,
+        choices=APPROVAL_CHOICES,
+        default=APPROVAL_PENDING,
+        db_index=True,
+    )
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_events",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [
@@ -92,4 +154,56 @@ class TicketPurchase(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.event.title} ({self.quantity})"
+
+
+class AuditLog(models.Model):
+    ACTION_ROLE_CHANGED = "role_changed"
+    ACTION_USER_ACTIVATED = "user_activated"
+    ACTION_USER_DEACTIVATED = "user_deactivated"
+    ACTION_EVENT_APPROVED = "event_approved"
+    ACTION_EVENT_REJECTED = "event_rejected"
+
+    ACTION_CHOICES = [
+        (ACTION_ROLE_CHANGED, "Role Changed"),
+        (ACTION_USER_ACTIVATED, "User Activated"),
+        (ACTION_USER_DEACTIVATED, "User Deactivated"),
+        (ACTION_EVENT_APPROVED, "Event Approved"),
+        (ACTION_EVENT_REJECTED, "Event Rejected"),
+    ]
+
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="performed_audit_logs",
+    )
+    action = models.CharField(max_length=40, choices=ACTION_CHOICES)
+    target_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="targeted_audit_logs",
+    )
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="audit_logs",
+    )
+    ticket_purchase = models.ForeignKey(
+        TicketPurchase,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="audit_logs",
+    )
+    details = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.actor.username} - {self.action} - {self.created_at:%Y-%m-%d %H:%M}"
 

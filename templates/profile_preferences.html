@@ -35,7 +35,13 @@
             <i class="fa-solid fa-user"></i> {{ user.username }}
           </button>
           <ul class="dropdown-menu dropdown-menu-end">
-            <li><a class="dropdown-item" href="{% url 'profile_preferences' %}">Profile & Preferences</a></li>
+                        <li><a class="dropdown-item" href="{% url 'profile_preferences' %}">Profile & Preferences</a></li>
+            {% if user_role == "admin" %}
+            <li><a class="dropdown-item" href="{% url 'admin_dashboard' %}">Admin Dashboard</a></li>
+            {% endif %}
+            {% if user_role == "organizer" or user_role == "admin" %}
+            <li><a class="dropdown-item" href="{% url 'organizer_dashboard' %}">Organizer Dashboard</a></li>
+            {% endif %}
             <li><a class="dropdown-item" href="{% url 'tickets' %}">My Tickets</a></li>
             <li><a class="dropdown-item" href="{% url 'logout' %}">Logout</a></li>
           </ul>
@@ -132,3 +138,4 @@
 </script>
 </body>
 </html>
+

@@ -1,0 +1,144 @@
+{% load static %}
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ page_title }} | EventMandu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="{% static 'css/style.css' %}?v=20260228a">
+</head>
+<body class="d-flex flex-column min-vh-100">
+<nav class="navbar navbar-expand-lg fixed-top brand-nav navbar-dark">
+  <div class="container">
+    <a class="navbar-brand brand-name" href="{% url 'home' %}">EventMandu</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav mx-auto text-center">
+        <li class="nav-item"><a class="nav-link" href="{% url 'home' %}">Home</a></li>
+        <li class="nav-item"><a class="nav-link" href="{% url 'events' %}">Events</a></li>
+        <li class="nav-item"><a class="nav-link active" href="{% url 'organizer_dashboard' %}">Organizer</a></li>
+      </ul>
+      <div class="d-flex align-items-center gap-2 justify-content-center">
+        <button class="btn btn-sm theme-toggle" id="themeToggle" type="button" aria-label="Toggle theme">
+          <i class="fa-solid fa-moon"></i>
+        </button>
+        <a class="btn btn-sm btn-light" href="{% url 'logout' %}">Logout</a>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<main class="section-space pt-4 flex-grow-1">
+  <div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h1 class="section-title mb-0">{{ page_title }}</h1>
+      <a href="{% url 'organizer_dashboard' %}" class="btn btn-outline-brand btn-sm"><i class="fa-solid fa-arrow-left me-2"></i>Back</a>
+    </div>
+
+    {% if form.errors %}
+    <div class="alert alert-danger">Please fix the highlighted errors and try again.</div>
+    {% endif %}
+
+    <div class="event-card">
+      <form method="post" novalidate>
+        {% csrf_token %}
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label" for="{{ form.title.id_for_label }}">Title</label>
+            {{ form.title }}
+            {% if form.title.errors %}<small class="text-danger">{{ form.title.errors|striptags }}</small>{% endif %}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label" for="{{ form.venue.id_for_label }}">Venue</label>
+            {{ form.venue }}
+            {% if form.venue.errors %}<small class="text-danger">{{ form.venue.errors|striptags }}</small>{% endif %}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label" for="{{ form.category.id_for_label }}">Category</label>
+            {{ form.category }}
+            {% if form.category.errors %}<small class="text-danger">{{ form.category.errors|striptags }}</small>{% endif %}
+          </div>
+          <div class="col-12">
+            <label class="form-label" for="{{ form.description.id_for_label }}">Description</label>
+            {{ form.description }}
+            {% if form.description.errors %}<small class="text-danger">{{ form.description.errors|striptags }}</small>{% endif %}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label" for="{{ form.start_date.id_for_label }}">Start Date</label>
+            {{ form.start_date }}
+            {% if form.start_date.errors %}<small class="text-danger">{{ form.start_date.errors|striptags }}</small>{% endif %}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label" for="{{ form.end_date.id_for_label }}">End Date</label>
+            {{ form.end_date }}
+            {% if form.end_date.errors %}<small class="text-danger">{{ form.end_date.errors|striptags }}</small>{% endif %}
+          </div>
+          <div class="col-md-2">
+            <label class="form-label" for="{{ form.price.id_for_label }}">Price</label>
+            {{ form.price }}
+            {% if form.price.errors %}<small class="text-danger">{{ form.price.errors|striptags }}</small>{% endif %}
+          </div>
+          <div class="col-md-2">
+            <label class="form-label" for="{{ form.popularity.id_for_label }}">Popularity</label>
+            {{ form.popularity }}
+            {% if form.popularity.errors %}<small class="text-danger">{{ form.popularity.errors|striptags }}</small>{% endif %}
+          </div>
+          <div class="col-md-2 d-flex align-items-end">
+            <div class="form-check">
+              {{ form.is_active }}
+              <label class="form-check-label" for="{{ form.is_active.id_for_label }}">Active</label>
+            </div>
+          </div>
+        </div>
+
+        {% if form.non_field_errors %}
+        <div class="mt-3">
+          {% for error in form.non_field_errors %}
+          <div class="text-danger">{{ error }}</div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="mt-4 d-flex gap-2">
+          <button type="submit" class="btn btn-primary-brand">{{ submit_label }}</button>
+          <a href="{% url 'organizer_dashboard' %}" class="btn btn-outline-brand">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="container text-center">
+    <small><i class="fa-regular fa-copyright"></i> 2026 EventMandu</small>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  (function () {
+    const root = document.documentElement;
+    const toggle = document.getElementById("themeToggle");
+    const saved = localStorage.getItem("eventmandu-theme");
+    if (saved) {
+      root.setAttribute("data-bs-theme", saved);
+    }
+    if (toggle) {
+      toggle.addEventListener("click", function () {
+        const current = root.getAttribute("data-bs-theme") === "dark" ? "dark" : "light";
+        const next = current === "dark" ? "light" : "dark";
+        root.setAttribute("data-bs-theme", next);
+        localStorage.setItem("eventmandu-theme", next);
+      });
+    }
+  })();
+</script>
+</body>
+</html>

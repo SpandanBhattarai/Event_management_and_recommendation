@@ -35,7 +35,10 @@ def normalize(value, max_value):
 # MAIN FUNCTION
 def get_recommended_events(request):
 
-    events = Event.objects.filter(is_active=True).select_related("category", "venue")
+    events = Event.objects.filter(
+        is_active=True,
+        approval_status=Event.APPROVAL_APPROVED,
+    ).select_related("category", "venue")
     scored_events = []
 
     user_lat = request.session.get("user_lat")
