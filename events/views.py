@@ -132,6 +132,11 @@ def events_view(request):
     )
 
 
+def event_detail(request, event_id):
+    event = get_object_or_404(Event, id=event_id, is_active=True)
+    return render(request, "event_detail.html", {"event": event})
+
+
 def venues_view(request):
     venues = Venue.objects.all()
     return render(request, "venues.html", {"venues": venues})
@@ -164,6 +169,16 @@ def profile_preferences_view(request):
     preferences, _ = UserPreference.objects.get_or_create(user=request.user)
 
     if request.method == "POST":
+        if request.POST.get("action") == "clear_preferences":
+            preferences.favorite_category = None
+            preferences.budget = None
+            preferences.save(update_fields=["favorite_category", "budget", "updated_at"])
+            request.session.pop("preferred_category", None)
+            request.session.pop("budget", None)
+            request.session.modified = True
+            
+            return redirect("profile_preferences")
+
         request.user.first_name = request.POST.get("first_name", "").strip()
         request.user.last_name = request.POST.get("last_name", "").strip()
         request.user.email = request.POST.get("email", "").strip()
@@ -198,6 +213,7 @@ def profile_preferences_view(request):
             request.session["budget"] = float(preferences.budget)
         else:
             request.session.pop("budget", None)
+        request.session.modified = True
 
         messages.success(request, "Profile and preferences updated.")
         return redirect("profile_preferences")
@@ -212,35 +228,40 @@ def profile_preferences_view(request):
 @login_required
 def buy_ticket(request, event_id):
     if request.method != "POST":
-        return redirect("events")
+        return redirect("event_detail", event_id=event_id)
 
     event = get_object_or_404(Event, id=event_id, is_active=True)
+    payment_method = request.POST.get("payment_method", "khalti").strip().lower()
     quantity_raw = request.POST.get("ticket_quantity", "1")
 
     try:
         quantity = int(quantity_raw)
     except ValueError:
         messages.error(request, "Invalid ticket quantity.")
-        return redirect("events")
+        return redirect("event_detail", event_id=event_id)
 
     if quantity < 1 or quantity > 10:
         messages.error(request, "Please select between 1 and 10 tickets.")
-        return redirect("events")
+        return redirect("event_detail", event_id=event_id)
+
+    if payment_method and payment_method != "khalti":
+        messages.error(request, "Selected payment method is not available.")
+        return redirect("event_detail", event_id=event_id)
 
     try:
         total_rupees = Decimal(event.price) * Decimal(quantity)
     except (InvalidOperation, TypeError):
         messages.error(request, "Unable to calculate ticket price.")
-        return redirect("events")
+        return redirect("event_detail", event_id=event_id)
 
     total_paisa = int(total_rupees * 100)
     khalti_secret_key = getattr(settings, "KHALTI_SECRET_KEY", "")
     if not khalti_secret_key:
         messages.error(request, "Khalti is not configured. Add KHALTI_SECRET_KEY in settings.")
-        return redirect("events")
+        return redirect("event_detail", event_id=event_id)
 
     return_url = request.build_absolute_uri(reverse("khalti_return"))
-    website_url = request.build_absolute_uri(reverse("events"))
+    website_url = request.build_absolute_uri(reverse("event_detail", args=[event.id]))
 
     payload = {
         "return_url": return_url,
@@ -266,15 +287,15 @@ def buy_ticket(request, event_id):
     except urllib_error.HTTPError as exc:
         error_body = exc.read().decode("utf-8", errors="ignore")
         messages.error(request, f"Khalti request failed: {error_body or exc.reason}")
-        return redirect("events")
+        return redirect("event_detail", event_id=event_id)
     except Exception:
         messages.error(request, "Could not connect to Khalti right now.")
-        return redirect("events")
+        return redirect("event_detail", event_id=event_id)
 
     payment_url = response_data.get("payment_url")
     if not payment_url:
         messages.error(request, "Khalti did not return a payment URL.")
-        return redirect("events")
+        return redirect("event_detail", event_id=event_id)
 
     TicketPurchase.objects.create(
         user=request.user,
@@ -321,6 +342,8 @@ def khalti_return(request):
             ticket.save(update_fields=["status", "khalti_txn_id"])
         messages.info(request, "Payment response received from Khalti.")
 
+    if ticket:
+        return redirect("event_detail", event_id=ticket.event_id)
     return redirect("events")
 
 

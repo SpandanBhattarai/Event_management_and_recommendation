@@ -30,12 +30,20 @@ html[data-bs-theme="dark"] {
   box-sizing: border-box;
 }
 
+html,
+body {
+  min-height: 100%;
+}
+
 body {
   margin: 0;
-  padding-top: 76px;
+  padding-top: 0;
   background: var(--bg);
   color: var(--text);
   font-family: "Poppins", "Montserrat", sans-serif;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
 
 a {
@@ -45,6 +53,11 @@ a {
 
 .section-space {
   padding: 5.5rem 0;
+}
+
+main {
+  flex: 1 0 auto;
+  padding-top: 76px;
 }
 
 .section-title {
@@ -342,7 +355,7 @@ a {
 }
 
 footer.site-footer {
-  margin-top: 3rem;
+  margin-top: auto;
   padding: 2rem 0;
   background: #285fb2;
   color: #e5ecfb;
@@ -384,7 +397,7 @@ footer .footer-link:hover {
 }
 
 @media (max-width: 767px) {
-  body {
+  main {
     padding-top: 72px;
   }
 

@@ -123,7 +123,7 @@
             <p class="event-meta mb-2"><i class="fa-solid fa-location-dot me-2"></i>{{ event.venue.city }} - {{ event.venue.name }}</p>
             <p class="event-price mb-2">NPR {{ event.price }}</p>
             <p class="section-subtitle mb-3">{{ event.description|truncatechars:110 }}</p>
-            <a href="{% url 'events' %}" class="btn btn-primary-brand btn-sm">View Details</a>
+            <a href="{% url 'event_detail' event.id %}" class="btn btn-primary-brand btn-sm">View Details</a>
           </article>
         </div>
         {% empty %}
@@ -147,7 +147,7 @@
             <p class="event-meta mb-2"><i class="fa-solid fa-location-dot me-2"></i>{{ event.venue.city }}</p>
             <p class="event-meta mb-2"><i class="fa-regular fa-clock me-2"></i>{{ event.end_date|date:"M d, Y h:i A" }}</p>
             <p class="event-price mb-2">NPR {{ event.price }}</p>
-            <a href="{% url 'events' %}" class="btn btn-outline-brand btn-sm">View Details</a>
+            <a href="{% url 'event_detail' event.id %}" class="btn btn-outline-brand btn-sm">View Details</a>
           </article>
         </div>
         {% empty %}

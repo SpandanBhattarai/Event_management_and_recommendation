@@ -112,26 +112,7 @@
             <p class="event-meta mb-2"><i class="fa-regular fa-clock me-2"></i>{{ event.end_date|date:"M d, Y h:i A" }}</p>
             <p class="event-price mb-2">NPR {{ event.price }}</p>
             <p class="section-subtitle mb-2">{{ event.description|truncatechars:90 }}</p>
-            <button type="button" class="btn btn-outline-brand btn-sm" data-bs-toggle="collapse" data-bs-target="#rec-buy-{{ event.id }}">View / Buy</button>
-            <div class="collapse" id="rec-buy-{{ event.id }}">
-              <div class="ticket-panel">
-                {% if user.is_authenticated %}
-                <form method="post" action="{% url 'buy_ticket' event.id %}" class="ticket-buy-form" data-unit-price="{{ event.price }}">
-                  {% csrf_token %}
-                  <div class="d-flex align-items-center gap-2">
-                    <select name="ticket_quantity" class="form-select form-select-sm ticket-qty" style="max-width: 110px;">
-                      <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
-                      <option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
-                    </select>
-                    <span class="small">Total: NPR <strong class="ticket-total">{{ event.price }}</strong></span>
-                  </div>
-                  <button type="submit" class="btn btn-accent-brand btn-sm mt-2">Buy Now</button>
-                </form>
-                {% else %}
-                <a href="{% url 'login' %}" class="btn btn-primary-brand btn-sm">Login to Buy</a>
-                {% endif %}
-              </div>
-            </div>
+            <a href="{% url 'event_detail' event.id %}" class="btn btn-outline-brand btn-sm">View Details</a>
           </article>
         </div>
         {% empty %}
@@ -155,27 +136,7 @@
             <p class="event-meta mb-2"><i class="fa-solid fa-layer-group me-2"></i>{{ event.category.name|default:"General" }}</p>
             <p class="event-price mb-2">NPR {{ event.price }}</p>
             <p class="section-subtitle mb-2">{{ event.description|truncatechars:120 }}</p>
-            <button type="button" class="btn btn-primary-brand btn-sm" data-bs-toggle="collapse" data-bs-target="#buy-{{ event.id }}">View Details</button>
-            <div class="collapse" id="buy-{{ event.id }}">
-              <div class="ticket-panel">
-                <p class="event-meta mb-2"><strong>Ends:</strong> {{ event.end_date|date:"M d, Y h:i A" }}</p>
-                {% if user.is_authenticated %}
-                <form method="post" action="{% url 'buy_ticket' event.id %}" class="ticket-buy-form" data-unit-price="{{ event.price }}">
-                  {% csrf_token %}
-                  <div class="d-flex align-items-center gap-2">
-                    <select name="ticket_quantity" class="form-select form-select-sm ticket-qty" style="max-width: 110px;">
-                      <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
-                      <option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
-                    </select>
-                    <span class="small">Total: NPR <strong class="ticket-total">{{ event.price }}</strong></span>
-                  </div>
-                  <button type="submit" class="btn btn-accent-brand btn-sm mt-2">Buy Now</button>
-                </form>
-                {% else %}
-                <a href="{% url 'login' %}" class="btn btn-primary-brand btn-sm">Login to Buy</a>
-                {% endif %}
-              </div>
-            </div>
+            <a href="{% url 'event_detail' event.id %}" class="btn btn-primary-brand btn-sm">View Details</a>
           </article>
         </div>
         {% empty %}
@@ -215,24 +176,8 @@
         localStorage.setItem("eventmandu-theme", next);
       });
     }
-
-    document.querySelectorAll('.ticket-buy-form').forEach(function(form) {
-      const select = form.querySelector('.ticket-qty');
-      const totalEl = form.querySelector('.ticket-total');
-      const unitPrice = parseFloat(form.dataset.unitPrice);
-
-      function updateTotal() {
-        const qty = parseInt(select.value || '1', 10);
-        const total = (isNaN(unitPrice) ? 0 : unitPrice) * qty;
-        totalEl.textContent = total.toFixed(2);
-      }
-
-      updateTotal();
-      select.addEventListener('change', updateTotal);
-    });
   })();
 </script>
 </body>
 </html>
-
 

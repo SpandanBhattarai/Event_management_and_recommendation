@@ -27,6 +27,7 @@ urlpatterns = [
      path('login/', login_view, name='login'),
      path('logout/', logout_view, name='logout'),
      path ('events/', views.events_view, name='events'),
+     path('events/<int:event_id>/', views.event_detail, name='event_detail'),
      path ('venues/', views.venues_view, name='venues'),
      path('contact/', views.contact_view, name='contact'),
      path('save_location/', views.save_location, name='save_location'),
