@@ -12,6 +12,8 @@
   --shadow: 0 18px 42px rgba(13, 71, 161, 0.12);
   --shadow-card: 0 3px 10px rgba(13, 71, 161, 0.08);
   --shadow-card-hover: 0 3px 10px rgba(13, 71, 161, 0.1);
+  --nav-offset: 110px;
+  --nav-offset-mobile: 96px;
 }
 
 html[data-bs-theme="dark"] {
@@ -57,7 +59,11 @@ a {
 
 main {
   flex: 1 0 auto;
-  padding-top: 76px;
+  padding-top: var(--nav-offset) !important;
+}
+
+main.pt-4 {
+  padding-top: var(--nav-offset) !important;
 }
 
 .section-title {
@@ -398,7 +404,11 @@ footer .footer-link:hover {
 
 @media (max-width: 767px) {
   main {
-    padding-top: 72px;
+    padding-top: var(--nav-offset-mobile) !important;
+  }
+
+  main.pt-4 {
+    padding-top: var(--nav-offset-mobile) !important;
   }
 
   .section-space {
