@@ -165,7 +165,7 @@
             <div class="ticket-panel h-100">
               <h5 class="mb-2">Reserve Tickets</h5>
               <p class="event-price mb-3">NPR {{ event.price }}</p>
-              {% if user.is_authenticated %}
+              {% if user.is_authenticated and can_book_event %}
               <form
                 method="post"
                 action="{% url 'buy_ticket' event.id %}"
@@ -226,6 +226,13 @@
                   Pay with Khalti
                 </button>
               </form>
+              {% elif user.is_authenticated %}
+              <p class="section-subtitle mb-3">
+                {{ booking_block_message }}
+              </p>
+              <button type="button" class="btn btn-outline-secondary w-100" disabled>
+                Booking Unavailable
+              </button>
               {% else %}
               <p class="section-subtitle mb-3">
                 Login to reserve tickets and proceed to payment.

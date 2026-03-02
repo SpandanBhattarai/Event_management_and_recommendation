@@ -32,6 +32,62 @@ def normalize(value, max_value):
     return value / max_value
 
 
+def get_category_score(
+    event,
+    user_category_id=None,
+    user_category_name=None,
+    has_explicit_category_preference=False,
+    category_counts=None,
+    max_category_count=0,
+):
+    category_counts = category_counts or Counter()
+    if not event.category:
+        return 0.0
+
+    explicit_score = 0.0
+    if user_category_id and event.category_id == user_category_id:
+        explicit_score = 1.0
+    elif user_category_name and event.category.name.lower() == user_category_name:
+        explicit_score = 1.0
+
+    history_score = 0.0
+    if max_category_count > 0:
+        history_score = category_counts.get(event.category_id, 0) / max_category_count
+
+    # If user has explicit category preference, give it higher weight. Otherwise rely solely on history score.
+    if has_explicit_category_preference:
+        if max_category_count > 0:
+            return (explicit_score * 0.8) + (history_score * 0.2)
+        return explicit_score
+
+    return history_score
+
+
+def get_budget_score(event_price, user_budget):
+    if user_budget is None:
+        return 0.0
+
+    try:
+        event_price_value = float(event_price)
+        budget_value = float(user_budget)
+    except (TypeError, ValueError):
+        return 0.0
+
+    # Normalize price difference by budget so scores are comparable across cheap and expensive users.
+    diff_ratio = abs(event_price_value - budget_value) / max(budget_value, 1.0)
+    return max(0.0, 1.0 - diff_ratio)
+
+
+def get_recency_score(event, now=None, horizon_days=30):
+        now = now or timezone.now()
+        if event.end_date <=  now:
+         return 0.0
+
+        if event.start_date <= now < event.end_date:
+            return 1.0
+        days_until_start= (event.start_date - now).total_seconds() / 86400
+        return max(0.0, 1.0 - (days_until_start / horizon_days))
+
 # MAIN FUNCTION
 def get_recommended_events(request):
 
@@ -106,24 +162,17 @@ def get_recommended_events(request):
 
     for event in events:
 
-        #Category Match
-        category_score = 0
-        if event.category:
-            if user_category_id and event.category_id == user_category_id:
-                category_score = 1
-            elif user_category_name and event.category.name.lower() == user_category_name:
-                category_score = 1
-
-        # History category boost is fallback only when explicit preference is not set.
-        if (not has_explicit_category_preference) and event.category and max_category_count > 0:
-            category_score = category_counts.get(event.category_id, 0) / max_category_count
+        category_score = get_category_score(
+            event,
+            user_category_id=user_category_id,
+            user_category_name=user_category_name,
+            has_explicit_category_preference=has_explicit_category_preference,
+            category_counts=category_counts,
+            max_category_count=max_category_count,
+        )
 
         #Budget Match
-        budget_score = 0
-        if user_budget is not None:
-            # user_budget is guaranteed to be numeric (float) or None
-            budget_difference = abs(float(event.price) - user_budget)
-            budget_score = 1 / (1 + budget_difference)
+        budget_score = get_budget_score(event.price, user_budget)
 
         #Distance Score
         distance_score = 0
@@ -140,7 +189,7 @@ def get_recommended_events(request):
         popularity_score = normalize(event.popularity, 5)
 
         #Upcoming Events Boost
-        recency_score = 1 if event.end_date > timezone.now() else 0
+        recency_score = get_recency_score(event)
 
         #Weighted Final Score
         final_score = (
@@ -158,19 +207,16 @@ def get_recommended_events(request):
 
     # show the calculated score in the terminal for debugging
     for event, score in scored_events:
-        category_score = 0
-        if event.category:
-            if user_category_id and event.category_id == user_category_id:
-                category_score = 1
-            elif user_category_name and event.category.name.lower() == user_category_name:
-                category_score = 1
-            elif (not has_explicit_category_preference) and max_category_count > 0:
-                category_score = category_counts.get(event.category_id, 0) / max_category_count
+        category_score = get_category_score(
+            event,
+            user_category_id=user_category_id,
+            user_category_name=user_category_name,
+            has_explicit_category_preference=has_explicit_category_preference,
+            category_counts=category_counts,
+            max_category_count=max_category_count,
+        )
 
-        budget_score = 0
-        if user_budget is not None:
-            budget_difference = abs(float(event.price) - user_budget)
-            budget_score = 1 / (1 + budget_difference)
+        budget_score = get_budget_score(event.price, user_budget)
 
         distance_score = 0
         if user_lat and user_lng:
@@ -183,7 +229,7 @@ def get_recommended_events(request):
             distance_score = 1 / (1 + distance)
 
         popularity_score = normalize(event.popularity, 5)
-        recency_score = 1 if event.start_date > timezone.now() else 0
+        recency_score = get_recency_score(event)
 
         print(
             f"Event: {event.title} | "

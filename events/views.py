@@ -37,6 +37,26 @@ def log_admin_action(actor, action, target_user=None, event=None, ticket_purchas
     )
 
 
+def _can_view_recommendations(user):
+    if not user.is_authenticated:
+        return False
+    return get_user_role(user) != UserRole.ROLE_ADMIN
+
+
+def _can_book_event(user, event):
+    if not user.is_authenticated:
+        return False, "Login to reserve tickets and proceed to payment."
+
+    user_role = get_user_role(user)
+    if user_role == UserRole.ROLE_ADMIN:
+        return False, "Admin accounts cannot purchase tickets."
+
+    if user_role == UserRole.ROLE_ORGANIZER and event.organizer_id == user.id:
+        return False, "Organizers cannot book their own events."
+
+    return True, ""
+
+
 def home(request):
     events = (
         Event.objects.filter(is_active=True, approval_status=Event.APPROVAL_APPROVED)
@@ -45,12 +65,20 @@ def home(request):
     )
     recommended_events = []
     if request.user.is_authenticated:
-        get_user_role(request.user)
+        user_role = get_user_role(request.user)
+    else:
+        user_role = None
+
+    if _can_view_recommendations(request.user):
         recommended_events = get_recommended_events(request)[:3]
     return render(
         request,
         "home.html",
-        {"events": events, "recommended_events": recommended_events},
+        {
+            "events": events,
+            "recommended_events": recommended_events,
+            "show_recommendations": user_role != UserRole.ROLE_ADMIN if user_role else False,
+        },
     )
 
 def register_view(request):
@@ -123,7 +151,9 @@ def events_view(request):
         .select_related("venue", "category")
         .order_by("start_date")
     )
-    recommended = get_recommended_events(request)
+    recommended = []
+    if _can_view_recommendations(request.user):
+        recommended = get_recommended_events(request)
 
     if selected_category:
         if selected_category.isdigit():
@@ -146,12 +176,15 @@ def events_view(request):
 
     recommended = recommended[:3]
 
+    show_recommendations = _can_view_recommendations(request.user)
+
     return render(
         request,
         "events.html",
         {
             "events": events,
             "recommended_events": recommended,
+            "show_recommendations": show_recommendations,
             "categories": categories,
             "selected_category": selected_category,
             "cities": cities,
@@ -168,7 +201,16 @@ def event_detail(request, event_id):
         is_active=True,
         approval_status=Event.APPROVAL_APPROVED,
     )
-    return render(request, "event_detail.html", {"event": event})
+    can_book_event, booking_block_message = _can_book_event(request.user, event)
+    return render(
+        request,
+        "event_detail.html",
+        {
+            "event": event,
+            "can_book_event": can_book_event,
+            "booking_block_message": booking_block_message,
+        },
+    )
 
 
 def venues_view(request):
@@ -191,6 +233,9 @@ def save_location(request):
 
 @login_required
 def recommended_events(request):
+    if not _can_view_recommendations(request.user):
+        messages.info(request, "Recommendations are not available for admin accounts.")
+        return redirect("home")
 
     events = get_recommended_events(request)
 
@@ -270,6 +315,11 @@ def buy_ticket(request, event_id):
         is_active=True,
         approval_status=Event.APPROVAL_APPROVED,
     )
+    can_book_event, booking_block_message = _can_book_event(request.user, event)
+    if not can_book_event:
+        messages.error(request, booking_block_message)
+        return redirect("event_detail", event_id=event_id)
+
     payment_method = request.POST.get("payment_method", "khalti").strip().lower()
     quantity_raw = request.POST.get("ticket_quantity", "1")
 
@@ -804,3 +854,7 @@ def organizer_event_attendees_csv(request, event_id):
             ]
         )
     return response
+
+def venue_detail(request, venue_id):
+    venue = get_object_or_404(Venue, id=venue_id)
+    return render(request, "venue_detail.html", {"venue": venue, })

@@ -44,5 +44,6 @@ urlpatterns = [
      path('dashboard/organizer/events/<int:event_id>/edit/', views.organizer_event_edit, name='organizer_event_edit'),
      path('dashboard/organizer/events/<int:event_id>/delete/', views.organizer_event_delete, name='organizer_event_delete'),
      path('dashboard/organizer/events/<int:event_id>/attendees.csv', views.organizer_event_attendees_csv, name='organizer_event_attendees_csv'),
+     path('venues/<int:venue_id>/', views.venue_detail, name='venue_detail'),
 ]
 

@@ -76,47 +76,39 @@
               <i class="fa-solid fa-moon"></i>
             </button>
             {% if user.is_authenticated %}
-            <div class="dropdown">
-              <button
-                class="btn btn-sm btn-light dropdown-toggle"
-                type="button"
-                data-bs-toggle="dropdown"
-              >
-                <i class="fa-solid fa-user"></i> {{ user.username }}
-              </button>
-              <ul class="dropdown-menu dropdown-menu-end">
-                <li>
-                  <a
-                    class="dropdown-item"
-                    href="{% url 'profile_preferences' %}"
-                    >Profile & Preferences</a
-                  >
-                </li>
-                {% if user_role == "admin" %}
-                <li>
-                  <a class="dropdown-item" href="{% url 'admin_dashboard' %}">Admin Dashboard</a>
-                </li>
-                {% endif %}
-                {% if user_role == "organizer" or user_role == "admin" %}
-                <li>
-                  <a class="dropdown-item" href="{% url 'organizer_dashboard' %}">Organizer Dashboard</a>
-                </li>
-                {% endif %}
-                <li>
-                  <a class="dropdown-item" href="{% url 'tickets' %}"
-                    >My Tickets</a
-                  >
-                </li>
-                <li>
-                  <a class="dropdown-item" href="{% url 'logout' %}">Logout</a>
-                </li>
-              </ul>
-            </div>
+              <div class="dropdown">
+                <button
+                  class="btn btn-sm btn-light dropdown-toggle"
+                  type="button"
+                  data-bs-toggle="dropdown"
+                >
+                  <i class="fa-solid fa-user"></i> {{ user.username }}
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li>
+                    <a class="dropdown-item" href="{% url 'profile_preferences' %}">Profile & Preferences</a>
+                  </li>
+                  {% if user_role == "admin" %}
+                    <li>
+                      <a class="dropdown-item" href="{% url 'admin_dashboard' %}">Admin Dashboard</a>
+                    </li>
+                  {% endif %}
+                  {% if user_role == "organizer" or user_role == "admin" %}
+                    <li>
+                      <a class="dropdown-item" href="{% url 'organizer_dashboard' %}">Organizer Dashboard</a>
+                    </li>
+                  {% endif %}
+                  <li>
+                    <a class="dropdown-item" href="{% url 'tickets' %}">My Tickets</a>
+                  </li>
+                  <li>
+                    <a class="dropdown-item" href="{% url 'logout' %}">Logout</a>
+                  </li>
+                </ul>
+              </div>
             {% else %}
-            <a class="btn btn-sm btn-light" href="{% url 'login' %}">Login</a>
-            <a class="btn btn-sm btn-outline-light" href="{% url 'register' %}"
-              >Sign Up</a
-            >
+              <a class="btn btn-sm btn-light" href="{% url 'login' %}">Login</a>
+              <a class="btn btn-sm btn-outline-light" href="{% url 'register' %}">Sign Up</a>
             {% endif %}
           </div>
         </div>
@@ -145,11 +137,13 @@
               <p class="event-meta mb-2">
                 <i class="fa-solid fa-road me-2"></i>{{ venue.address }}
               </p>
-              <p class="event-meta mb-2"><i class="fa-solid fa-users me-2"></i>Capacity: {{ venue.capacity }}</p>
+              <p class="event-meta mb-2">
+                <i class="fa-solid fa-users me-2"></i>Capacity: {{ venue.capacity }}
+              </p>
               <a
-                href="{% url 'events' %}"
+                href="{% url 'venue_detail' venue.id %}"
                 class="btn btn-primary-brand btn-sm mt-2"
-                >View Events</a
+                >View Venue</a
               >
             </article>
           </div>
