@@ -140,7 +140,7 @@ def get_recommended_events(request):
         popularity_score = normalize(event.popularity, 5)
 
         #Upcoming Events Boost
-        recency_score = 1 if event.start_date > timezone.now() else 0
+        recency_score = 1 if event.end_date > timezone.now() else 0
 
         #Weighted Final Score
         final_score = (

@@ -156,6 +156,21 @@ main.pt-4 {
   color: #ffffff;
 }
 
+.dashboard-action-btn {
+  min-width: 84px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.dashboard-manage-btn {
+  width: 92px;
+  height: 32px;
+  padding: 0 0.75rem;
+  line-height: 1;
+}
+
 .hero-wrap {
   padding: 5.8rem 0 5rem;
 }

@@ -123,6 +123,7 @@ class UserPreference(models.Model):
         related_name="user_preferences",
     )
     budget = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    preferred_city = models.CharField(max_length=100, blank=True, default="")
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):

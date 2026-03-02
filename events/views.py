@@ -3,6 +3,7 @@ import uuid
 import csv
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
+from django.core.paginator import Paginator
 from django.db.models import Count, DecimalField, IntegerField, Q, Sum, Value
 from django.db.models.functions import TruncMonth
 from urllib import error as urllib_error
@@ -40,12 +41,12 @@ def home(request):
     events = (
         Event.objects.filter(is_active=True, approval_status=Event.APPROVAL_APPROVED)
         .select_related("venue", "category")
-        .order_by("start_date")[:6]
+        .order_by("start_date")[:3]
     )
     recommended_events = []
     if request.user.is_authenticated:
         get_user_role(request.user)
-        recommended_events = get_recommended_events(request)[:6]
+        recommended_events = get_recommended_events(request)[:3]
     return render(
         request,
         "home.html",
@@ -644,6 +645,16 @@ def organizer_dashboard(request):
         )
         .order_by("start_date")
     )
+    event_query = request.GET.get("event_q", "").strip()
+    if event_query:
+        event_rows = event_rows.filter(
+            Q(title__icontains=event_query)
+            | Q(venue__name__icontains=event_query)
+            | Q(venue__city__icontains=event_query)
+            | Q(category__name__icontains=event_query)
+        )
+    event_paginator = Paginator(event_rows, 8)
+    event_page_obj = event_paginator.get_page(request.GET.get("event_page"))
 
     monthly_raw = (
         purchases.annotate(month=TruncMonth("created_at"))
@@ -654,13 +665,23 @@ def organizer_dashboard(request):
     monthly_labels = [row["month"].strftime("%b %Y") for row in monthly_raw if row.get("month")]
     monthly_revenue = [float(row["total"] or 0) for row in monthly_raw]
 
-    attendees = purchases.select_related("event", "user").order_by("-created_at")[:80]
+    attendee_rows = purchases.select_related("event", "user").order_by("-created_at")
+    attendee_query = request.GET.get("attendee_q", "").strip()
+    if attendee_query:
+        attendee_rows = attendee_rows.filter(
+            Q(user__username__icontains=attendee_query)
+            | Q(user__email__icontains=attendee_query)
+            | Q(event__title__icontains=attendee_query)
+            | Q(purchase_order_id__icontains=attendee_query)
+        )
+    attendee_paginator = Paginator(attendee_rows, 12)
+    attendee_page_obj = attendee_paginator.get_page(request.GET.get("attendee_page"))
 
     return render(
         request,
         "organizer_dashboard.html",
         {
-            "events": event_rows,
+            "events": event_page_obj,
             "my_events_count": my_events_count,
             "my_total_revenue": my_total_revenue,
             "today_sales": today_sales,
@@ -671,7 +692,9 @@ def organizer_dashboard(request):
             "monthly_revenue": monthly_revenue,
             "monthly_labels_json": json.dumps(monthly_labels),
             "monthly_revenue_json": json.dumps(monthly_revenue),
-            "attendees": attendees,
+            "attendees": attendee_page_obj,
+            "event_q": event_query,
+            "attendee_q": attendee_query,
         },
     )
 
