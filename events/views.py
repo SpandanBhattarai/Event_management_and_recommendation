@@ -4,6 +4,7 @@ import csv
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Count, DecimalField, IntegerField, Q, Sum, Value
 from django.db.models.functions import TruncMonth
 from urllib import error as urllib_error
@@ -21,9 +22,11 @@ from django.utils import timezone
 from django.db.models.functions import Coalesce
 from django.views.decorators.http import require_POST
 from .models import AuditLog, Category, Event, TicketPurchase, UserPreference, UserRole, Venue
-from .recommendation import get_recommended_events
+from .recommendation import get_event_final_score, get_recommended_events
 from .roles import get_user_role, role_required
 from .forms import OrganizerEventForm
+
+RESERVATION_HOLD_MINUTES = 15
 
 
 def log_admin_action(actor, action, target_user=None, event=None, ticket_purchase=None, details=""):
@@ -35,6 +38,15 @@ def log_admin_action(actor, action, target_user=None, event=None, ticket_purchas
         ticket_purchase=ticket_purchase,
         details=details,
     )
+
+
+def _expire_event_reservations(event, now):
+    TicketPurchase.objects.filter(
+        event=event,
+        status=TicketPurchase.STATUS_INITIATED,
+        reservation_expires_at__isnull=False,
+        reservation_expires_at__lte=now,
+    ).update(status=TicketPurchase.STATUS_FAILED, reservation_expires_at=None)
 
 
 def _can_view_recommendations(user):
@@ -140,6 +152,7 @@ def logout_view(request):
     return redirect("login")
 
 def events_view(request):
+    selected_q = request.GET.get("q", "").strip()
     selected_category = request.GET.get("category")
     selected_city = request.GET.get("city", "").strip()
     selected_max_price = request.GET.get("max_price", "").strip()
@@ -151,6 +164,16 @@ def events_view(request):
         .select_related("venue", "category")
         .order_by("start_date")
     )
+
+    if selected_q:
+        events = events.filter(
+            Q(title__icontains=selected_q)
+            | Q(description__icontains=selected_q)
+            | Q(venue__name__icontains=selected_q)
+            | Q(venue__city__icontains=selected_q)
+            | Q(category__name__icontains=selected_q)
+        )
+
     recommended = []
     if _can_view_recommendations(request.user):
         recommended = get_recommended_events(request)
@@ -175,6 +198,8 @@ def events_view(request):
             selected_max_price = ""
 
     recommended = recommended[:3]
+    events_paginator = Paginator(events, 9)
+    events_page = events_paginator.get_page(request.GET.get("page"))
 
     show_recommendations = _can_view_recommendations(request.user)
 
@@ -182,9 +207,10 @@ def events_view(request):
         request,
         "events.html",
         {
-            "events": events,
+            "events": events_page,
             "recommended_events": recommended,
             "show_recommendations": show_recommendations,
+            "selected_q": selected_q,
             "categories": categories,
             "selected_category": selected_category,
             "cities": cities,
@@ -202,6 +228,11 @@ def event_detail(request, event_id):
         approval_status=Event.APPROVAL_APPROVED,
     )
     can_book_event, booking_block_message = _can_book_event(request.user, event)
+    final_score = None
+    final_score_percent = None
+    if _can_view_recommendations(request.user):
+        final_score = get_event_final_score(request, event)
+        final_score_percent = final_score * 100
     return render(
         request,
         "event_detail.html",
@@ -209,6 +240,8 @@ def event_detail(request, event_id):
             "event": event,
             "can_book_event": can_book_event,
             "booking_block_message": booking_block_message,
+            "final_score": final_score,
+            "final_score_percent": final_score_percent,
         },
     )
 
@@ -310,7 +343,7 @@ def buy_ticket(request, event_id):
         return redirect("event_detail", event_id=event_id)
 
     event = get_object_or_404(
-        Event,
+        Event.objects.select_related("venue"),
         id=event_id,
         is_active=True,
         approval_status=Event.APPROVAL_APPROVED,
@@ -337,18 +370,117 @@ def buy_ticket(request, event_id):
         messages.error(request, "Selected payment method is not available.")
         return redirect("event_detail", event_id=event_id)
 
-    try:
-        total_rupees = Decimal(event.price) * Decimal(quantity)
-    except (InvalidOperation, TypeError):
-        messages.error(request, "Unable to calculate ticket price.")
-        return redirect("event_detail", event_id=event_id)
-
-    total_paisa = int(total_rupees * 100)
     khalti_secret_key = getattr(settings, "KHALTI_SECRET_KEY", "")
     if not khalti_secret_key:
         messages.error(request, "Khalti is not configured. Add KHALTI_SECRET_KEY in settings.")
         return redirect("event_detail", event_id=event_id)
 
+    hold_id = None
+    merged_quantity = quantity
+    total_rupees = Decimal("0.00")
+    previous_hold_state = None
+    now = timezone.now()
+    reservation_expires_at = now + timedelta(minutes=RESERVATION_HOLD_MINUTES)
+
+    with transaction.atomic():
+        locked_event = get_object_or_404(
+            Event.objects.select_related("venue").select_for_update(),
+            id=event_id,
+            is_active=True,
+            approval_status=Event.APPROVAL_APPROVED,
+        )
+
+        _expire_event_reservations(locked_event, now)
+
+        existing_hold = (
+            TicketPurchase.objects.select_for_update()
+            .filter(
+                user=request.user,
+                event=locked_event,
+                status=TicketPurchase.STATUS_INITIATED,
+                reservation_expires_at__gt=now,
+            )
+            .order_by("-created_at")
+            .first()
+        )
+
+        existing_hold_quantity = existing_hold.quantity if existing_hold else 0
+        merged_quantity = existing_hold_quantity + quantity
+
+        sold_quantity = (
+            TicketPurchase.objects.filter(event=locked_event, status=TicketPurchase.STATUS_COMPLETED)
+            .aggregate(total=Coalesce(Sum("quantity"), Value(0, output_field=IntegerField())))
+            .get("total", 0)
+        )
+        reserved_quantity_total = (
+            TicketPurchase.objects.filter(
+                event=locked_event,
+                status=TicketPurchase.STATUS_INITIATED,
+                reservation_expires_at__gt=now,
+            )
+            .aggregate(total=Coalesce(Sum("quantity"), Value(0, output_field=IntegerField())))
+            .get("total", 0)
+        )
+        reserved_by_others = max(reserved_quantity_total - existing_hold_quantity, 0)
+        available_for_user = max(int(locked_event.venue.capacity) - int(sold_quantity) - int(reserved_by_others), 0)
+
+        if merged_quantity > available_for_user:
+            messages.error(
+                request,
+                f"Only {available_for_user} ticket(s) are currently available for this event.",
+            )
+            return redirect("event_detail", event_id=event_id)
+
+        try:
+            total_rupees = Decimal(locked_event.price) * Decimal(merged_quantity)
+        except (InvalidOperation, TypeError):
+            messages.error(request, "Unable to calculate ticket price.")
+            return redirect("event_detail", event_id=event_id)
+
+        hold_purchase_order_id = f"event-{locked_event.id}-user-{request.user.id}-{uuid.uuid4().hex[:10]}"
+
+        if existing_hold:
+            previous_hold_state = {
+                "quantity": existing_hold.quantity,
+                "total_amount": existing_hold.total_amount,
+                "purchase_order_id": existing_hold.purchase_order_id,
+                "khalti_pidx": existing_hold.khalti_pidx,
+                "khalti_txn_id": existing_hold.khalti_txn_id,
+                "reservation_expires_at": existing_hold.reservation_expires_at,
+            }
+            existing_hold.quantity = merged_quantity
+            existing_hold.total_amount = total_rupees
+            existing_hold.purchase_order_id = hold_purchase_order_id
+            existing_hold.khalti_pidx = None
+            existing_hold.khalti_txn_id = None
+            existing_hold.reservation_expires_at = reservation_expires_at
+            existing_hold.status = TicketPurchase.STATUS_INITIATED
+            existing_hold.save(
+                update_fields=[
+                    "quantity",
+                    "total_amount",
+                    "purchase_order_id",
+                    "khalti_pidx",
+                    "khalti_txn_id",
+                    "reservation_expires_at",
+                    "status",
+                ]
+            )
+            hold = existing_hold
+        else:
+            hold = TicketPurchase.objects.create(
+                user=request.user,
+                event=locked_event,
+                quantity=merged_quantity,
+                total_amount=total_rupees,
+                status=TicketPurchase.STATUS_INITIATED,
+                purchase_order_id=hold_purchase_order_id,
+                reservation_expires_at=reservation_expires_at,
+            )
+
+        hold_id = hold.id
+
+    total_paisa = int(total_rupees * 100)
     return_url = request.build_absolute_uri(reverse("khalti_return"))
     website_url = request.build_absolute_uri(reverse("event_detail", args=[event.id]))
 
@@ -356,8 +488,8 @@ def buy_ticket(request, event_id):
         "return_url": return_url,
         "website_url": website_url,
         "amount": total_paisa,
-        "purchase_order_id": f"event-{event.id}-user-{request.user.id}-{uuid.uuid4().hex[:10]}",
-        "purchase_order_name": f"{event.title} x {quantity}",
+        "purchase_order_id": hold.purchase_order_id,
+        "purchase_order_name": f"{event.title} x {merged_quantity}",
     }
 
     khalti_request = urllib_request.Request(
@@ -374,27 +506,115 @@ def buy_ticket(request, event_id):
         with urllib_request.urlopen(khalti_request, timeout=20) as response:
             response_data = json.loads(response.read().decode("utf-8"))
     except urllib_error.HTTPError as exc:
+        if hold_id:
+            with transaction.atomic():
+                hold = (
+                    TicketPurchase.objects.select_for_update()
+                    .filter(id=hold_id, user=request.user, status=TicketPurchase.STATUS_INITIATED)
+                    .first()
+                )
+                if hold:
+                    if previous_hold_state:
+                        hold.quantity = previous_hold_state["quantity"]
+                        hold.total_amount = previous_hold_state["total_amount"]
+                        hold.purchase_order_id = previous_hold_state["purchase_order_id"]
+                        hold.khalti_pidx = previous_hold_state["khalti_pidx"]
+                        hold.khalti_txn_id = previous_hold_state["khalti_txn_id"]
+                        hold.reservation_expires_at = previous_hold_state["reservation_expires_at"]
+                        hold.save(
+                            update_fields=[
+                                "quantity",
+                                "total_amount",
+                                "purchase_order_id",
+                                "khalti_pidx",
+                                "khalti_txn_id",
+                                "reservation_expires_at",
+                            ]
+                        )
+                    else:
+                        hold.status = TicketPurchase.STATUS_FAILED
+                        hold.reservation_expires_at = None
+                        hold.save(update_fields=["status", "reservation_expires_at"])
         error_body = exc.read().decode("utf-8", errors="ignore")
         messages.error(request, f"Khalti request failed: {error_body or exc.reason}")
         return redirect("event_detail", event_id=event_id)
     except Exception:
+        if hold_id:
+            with transaction.atomic():
+                hold = (
+                    TicketPurchase.objects.select_for_update()
+                    .filter(id=hold_id, user=request.user, status=TicketPurchase.STATUS_INITIATED)
+                    .first()
+                )
+                if hold:
+                    if previous_hold_state:
+                        hold.quantity = previous_hold_state["quantity"]
+                        hold.total_amount = previous_hold_state["total_amount"]
+                        hold.purchase_order_id = previous_hold_state["purchase_order_id"]
+                        hold.khalti_pidx = previous_hold_state["khalti_pidx"]
+                        hold.khalti_txn_id = previous_hold_state["khalti_txn_id"]
+                        hold.reservation_expires_at = previous_hold_state["reservation_expires_at"]
+                        hold.save(
+                            update_fields=[
+                                "quantity",
+                                "total_amount",
+                                "purchase_order_id",
+                                "khalti_pidx",
+                                "khalti_txn_id",
+                                "reservation_expires_at",
+                            ]
+                        )
+                    else:
+                        hold.status = TicketPurchase.STATUS_FAILED
+                        hold.reservation_expires_at = None
+                        hold.save(update_fields=["status", "reservation_expires_at"])
         messages.error(request, "Could not connect to Khalti right now.")
         return redirect("event_detail", event_id=event_id)
 
     payment_url = response_data.get("payment_url")
     if not payment_url:
+        if hold_id:
+            with transaction.atomic():
+                hold = (
+                    TicketPurchase.objects.select_for_update()
+                    .filter(id=hold_id, user=request.user, status=TicketPurchase.STATUS_INITIATED)
+                    .first()
+                )
+                if hold:
+                    if previous_hold_state:
+                        hold.quantity = previous_hold_state["quantity"]
+                        hold.total_amount = previous_hold_state["total_amount"]
+                        hold.purchase_order_id = previous_hold_state["purchase_order_id"]
+                        hold.khalti_pidx = previous_hold_state["khalti_pidx"]
+                        hold.khalti_txn_id = previous_hold_state["khalti_txn_id"]
+                        hold.reservation_expires_at = previous_hold_state["reservation_expires_at"]
+                        hold.save(
+                            update_fields=[
+                                "quantity",
+                                "total_amount",
+                                "purchase_order_id",
+                                "khalti_pidx",
+                                "khalti_txn_id",
+                                "reservation_expires_at",
+                            ]
+                        )
+                    else:
+                        hold.status = TicketPurchase.STATUS_FAILED
+                        hold.reservation_expires_at = None
+                        hold.save(update_fields=["status", "reservation_expires_at"])
         messages.error(request, "Khalti did not return a payment URL.")
         return redirect("event_detail", event_id=event_id)
 
-    TicketPurchase.objects.create(
-        user=request.user,
-        event=event,
-        quantity=quantity,
-        total_amount=total_rupees,
-        status=TicketPurchase.STATUS_INITIATED,
-        khalti_pidx=response_data.get("pidx"),
-        purchase_order_id=payload["purchase_order_id"],
-    )
+    with transaction.atomic():
+        hold = (
+            TicketPurchase.objects.select_for_update()
+            .filter(id=hold_id, user=request.user, status=TicketPurchase.STATUS_INITIATED)
+            .first()
+        )
+        if hold:
+            hold.khalti_pidx = response_data.get("pidx")
+            hold.reservation_expires_at = timezone.now() + timedelta(minutes=RESERVATION_HOLD_MINUTES)
+            hold.save(update_fields=["khalti_pidx", "reservation_expires_at"])
 
     return redirect(payment_url)
 
@@ -414,21 +634,46 @@ def khalti_return(request):
 
     if status == "Completed":
         if ticket:
-            ticket.status = TicketPurchase.STATUS_COMPLETED
-            ticket.khalti_txn_id = txn_id or ticket.khalti_txn_id
-            ticket.save(update_fields=["status", "khalti_txn_id"])
+            with transaction.atomic():
+                ticket = TicketPurchase.objects.select_for_update().get(id=ticket.id)
+                ticket.status = TicketPurchase.STATUS_COMPLETED
+                ticket.khalti_txn_id = txn_id or ticket.khalti_txn_id
+                ticket.reservation_expires_at = None
+                ticket.save(update_fields=["status", "khalti_txn_id", "reservation_expires_at"])
+
+                merged_target = (
+                    TicketPurchase.objects.select_for_update()
+                    .filter(
+                        user=ticket.user,
+                        event=ticket.event,
+                        status=TicketPurchase.STATUS_COMPLETED,
+                    )
+                    .exclude(id=ticket.id)
+                    .order_by("created_at")
+                    .first()
+                )
+                if merged_target:
+                    merged_target.quantity = int(merged_target.quantity) + int(ticket.quantity)
+                    merged_target.total_amount = Decimal(merged_target.total_amount) + Decimal(ticket.total_amount)
+                    if ticket.khalti_txn_id:
+                        merged_target.khalti_txn_id = ticket.khalti_txn_id
+                    merged_target.save(update_fields=["quantity", "total_amount", "khalti_txn_id"])
+                    ticket.delete()
+                    ticket = merged_target
         messages.success(request, "Payment completed successfully.")
     elif status == "User canceled":
         if ticket:
             ticket.status = TicketPurchase.STATUS_CANCELED
             ticket.khalti_txn_id = txn_id or ticket.khalti_txn_id
-            ticket.save(update_fields=["status", "khalti_txn_id"])
+            ticket.reservation_expires_at = None
+            ticket.save(update_fields=["status", "khalti_txn_id", "reservation_expires_at"])
         messages.warning(request, "Payment was canceled.")
     else:
         if ticket:
             ticket.status = TicketPurchase.STATUS_FAILED
             ticket.khalti_txn_id = txn_id or ticket.khalti_txn_id
-            ticket.save(update_fields=["status", "khalti_txn_id"])
+            ticket.reservation_expires_at = None
+            ticket.save(update_fields=["status", "khalti_txn_id", "reservation_expires_at"])
         messages.info(request, "Payment response received from Khalti.")
 
     if ticket:

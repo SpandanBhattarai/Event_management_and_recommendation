@@ -151,6 +151,7 @@ class TicketPurchase(models.Model):
     khalti_pidx = models.CharField(max_length=120, blank=True, null=True, db_index=True)
     khalti_txn_id = models.CharField(max_length=120, blank=True, null=True)
     purchase_order_id = models.CharField(max_length=120, unique=True)
+    reservation_expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

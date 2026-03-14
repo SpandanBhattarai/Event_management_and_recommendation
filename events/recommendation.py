@@ -243,3 +243,87 @@ def get_recommended_events(request):
         )
     
     return [event[0] for event in scored_events]
+
+
+def get_event_final_score(request, event):
+    user_lat = request.session.get("user_lat")
+    user_lng = request.session.get("user_lng")
+    user_budget = None
+    user_category = None
+    user_category_id = None
+    user_category_name = None
+
+    category_counts = Counter()
+    max_category_count = 0
+    if request.user.is_authenticated:
+        preferences = (
+            UserPreference.objects.filter(user_id=request.user.id)
+            .only("budget", "favorite_category_id")
+            .first()
+        )
+        if preferences:
+            if preferences.budget is not None:
+                user_budget = float(preferences.budget)
+            if preferences.favorite_category_id:
+                user_category_id = preferences.favorite_category_id
+        purchased_tickets = (
+            TicketPurchase.objects.filter(
+                user=request.user,
+                status=TicketPurchase.STATUS_COMPLETED,
+                event__category__isnull=False,
+            )
+            .select_related("event__category")
+        )
+        category_counts = Counter(ticket.event.category_id for ticket in purchased_tickets)
+        if category_counts:
+            max_category_count = max(category_counts.values())
+
+    if user_budget is None:
+        user_budget = request.session.get("budget")
+        if user_budget is not None:
+            try:
+                user_budget = float(user_budget)
+            except (ValueError, TypeError):
+                user_budget = None
+
+    if not user_category_id:
+        user_category = request.session.get("preferred_category")
+
+    if user_category:
+        if str(user_category).isdigit():
+            user_category_id = int(user_category)
+        else:
+            user_category_name = str(user_category).strip().lower()
+    has_explicit_category_preference = bool(user_category_id or user_category_name)
+
+    category_score = get_category_score(
+        event,
+        user_category_id=user_category_id,
+        user_category_name=user_category_name,
+        has_explicit_category_preference=has_explicit_category_preference,
+        category_counts=category_counts,
+        max_category_count=max_category_count,
+    )
+    budget_score = get_budget_score(event.price, user_budget)
+
+    distance_score = 0
+    if user_lat and user_lng:
+        distance = calculate_distance(
+            float(user_lat),
+            float(user_lng),
+            event.venue.latitude,
+            event.venue.longitude,
+        )
+        distance_score = 1 / (1 + distance)
+
+    popularity_score = normalize(event.popularity, 5)
+    recency_score = get_recency_score(event)
+
+    final_score = (
+        (category_score * 0.3)
+        + (budget_score * 0.2)
+        + (distance_score * 0.25)
+        + (popularity_score * 0.15)
+        + (recency_score * 0.1)
+    )
+    return final_score

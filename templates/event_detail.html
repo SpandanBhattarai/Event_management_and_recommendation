@@ -145,6 +145,11 @@
           <div class="col-lg-7">
             <div class="event-card h-100">
               <h1 class="section-title mb-2">{{ event.title }}</h1>
+              {% if user.is_authenticated and final_score_percent is not None %}
+              <p class="event-meta mb-2">
+                <i class="fa-solid fa-star me-2"></i>Recommended Match Score: {{ final_score_percent|floatformat:0 }}%
+              </p>
+              {% endif %}
               <p class="section-subtitle mb-3">{{ event.description }}</p>
               <div class="row g-3">
                 <div class="col-sm-6">

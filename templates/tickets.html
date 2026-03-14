@@ -80,7 +80,7 @@
                 <tr>
                   <th>Event</th>
                   <th>Location</th>
-                  <th>Start</th>
+                  <th>Date</th>
                   <th>Qty</th>
                   <th>Total</th>
                   <th>Purchased</th>
@@ -90,8 +90,10 @@
                 {% for ticket in tickets %}
                 <tr>
                   <td>{{ ticket.event.title }}</td>
-                  <td>{{ ticket.event.venue.city }} - {{ ticket.event.venue.name }}</td>
-                  <td>{{ ticket.event.start_date|date:"M d, Y h:i A" }}</td>
+                  <td>
+                    {{ ticket.event.venue.city }} - {{ ticket.event.venue.name}}
+                  </td>
+                  <td>{{ ticket.event.end_date|date:"M d, Y h:i A" }}</td>
                   <td>{{ ticket.quantity }}</td>
                   <td>NPR {{ ticket.total_amount }}</td>
                   <td>{{ ticket.created_at|date:"M d, Y h:i A" }}</td>
