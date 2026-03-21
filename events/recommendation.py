@@ -7,7 +7,6 @@ from .models import Event, TicketPurchase, UserPreference
 # module logger
 logger = logging.getLogger(__name__)
 
-
 # Haversine Formula
 def calculate_distance(lat1, lon1, lat2, lon2):
     R = 6371  # Earth radius in km
@@ -30,6 +29,14 @@ def normalize(value, max_value):
     if max_value == 0:
         return 0
     return value / max_value
+
+
+def get_distance_score(distance_km, max_distance_km=50):
+    try:
+        distance_value = float(distance_km)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, 1.0 - (distance_value / max_distance_km))
 
 
 def get_category_score(
@@ -87,6 +94,16 @@ def get_recency_score(event, now=None, horizon_days=30):
             return 1.0
         days_until_start= (event.start_date - now).total_seconds() / 86400
         return max(0.0, 1.0 - (days_until_start / horizon_days))
+
+
+def calculate_final_score(category_score, budget_score, distance_score, popularity_score, recency_score):
+    return (
+        (category_score * 0.30)
+        + (budget_score * 0.20)
+        + (distance_score * 0.15)
+        + (popularity_score * 0.15)
+        + (recency_score * 0.20)
+    )
 
 # MAIN FUNCTION
 def get_recommended_events(request):
@@ -183,7 +200,7 @@ def get_recommended_events(request):
                 event.venue.latitude,
                 event.venue.longitude,
             )
-            distance_score = 1 / (1 + distance)
+            distance_score = get_distance_score(distance)
 
         #Popularity Score
         popularity_score = normalize(event.popularity, 5)
@@ -192,12 +209,12 @@ def get_recommended_events(request):
         recency_score = get_recency_score(event)
 
         #Weighted Final Score
-        final_score = (
-            (category_score * 0.3)
-            + (budget_score * 0.2)
-            + (distance_score * 0.25)
-            + (popularity_score * 0.15)
-            + (recency_score * 0.1)
+        final_score = calculate_final_score(
+            category_score,
+            budget_score,
+            distance_score,
+            popularity_score,
+            recency_score,
         )
 
         scored_events.append((event, final_score))
@@ -226,18 +243,18 @@ def get_recommended_events(request):
                 event.venue.latitude,
                 event.venue.longitude,
             )
-            distance_score = 1 / (1 + distance)
+            distance_score = get_distance_score(distance)
 
         popularity_score = normalize(event.popularity, 5)
         recency_score = get_recency_score(event)
 
         print(
             f"Event: {event.title} | "
-            f"cat={category_score:.4f}({category_score * 0.3:.4f}) "
-            f"budget={budget_score:.4f}({budget_score * 0.2:.4f}) "
-            f"dist={distance_score:.4f}({distance_score * 0.25:.4f}) "
+            f"cat={category_score:.4f}({category_score * 0.30:.4f}) "
+            f"budget={budget_score:.4f}({budget_score * 0.20:.4f}) "
+            f"dist={distance_score:.4f}({distance_score * 0.15:.4f}) "
             f"pop={popularity_score:.4f}({popularity_score * 0.15:.4f}) "
-            f"recency={recency_score:.4f}({recency_score * 0.1:.4f}) "
+            f"recency={recency_score:.4f}({recency_score * 0.20:.4f}) "
             f"total={score:.4f}",
             flush=True,
         )
@@ -314,16 +331,16 @@ def get_event_final_score(request, event):
             event.venue.latitude,
             event.venue.longitude,
         )
-        distance_score = 1 / (1 + distance)
+        distance_score = get_distance_score(distance)
 
     popularity_score = normalize(event.popularity, 5)
     recency_score = get_recency_score(event)
 
-    final_score = (
-        (category_score * 0.3)
-        + (budget_score * 0.2)
-        + (distance_score * 0.25)
-        + (popularity_score * 0.15)
-        + (recency_score * 0.1)
+    final_score = calculate_final_score(
+        category_score,
+        budget_score,
+        distance_score,
+        popularity_score,
+        recency_score,
     )
     return final_score

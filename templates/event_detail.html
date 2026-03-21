@@ -144,6 +144,11 @@
         <section class="row g-4 align-items-start">
           <div class="col-lg-7">
             <div class="event-card h-100">
+              {% if event.image %}
+              <div class="event-detail-image-wrap mb-4">
+                <img src="{{ event.image.url }}" alt="{{ event.title }}" class="event-detail-image">
+              </div>
+              {% endif %}
               <h1 class="section-title mb-2">{{ event.title }}</h1>
               {% if user.is_authenticated and final_score_percent is not None %}
               <p class="event-meta mb-2">

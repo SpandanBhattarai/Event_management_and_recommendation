@@ -96,6 +96,7 @@ class Event(models.Model):
         related_name="approved_events",
     )
     approved_at = models.DateTimeField(null=True, blank=True)
+    image = models.ImageField(upload_to="events/", null=True, blank=True)
 
     class Meta:
         constraints = [

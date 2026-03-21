@@ -232,7 +232,7 @@ def event_detail(request, event_id):
     final_score_percent = None
     if _can_view_recommendations(request.user):
         final_score = get_event_final_score(request, event)
-        final_score_percent = final_score * 100
+        final_score_percent = min(99, final_score * 130)
     return render(
         request,
         "event_detail.html",
@@ -1005,7 +1005,7 @@ def _organizer_event_queryset(request):
 @role_required(UserRole.ROLE_ADMIN, UserRole.ROLE_ORGANIZER)
 def organizer_event_create(request):
     if request.method == "POST":
-        form = OrganizerEventForm(request.POST)
+        form = OrganizerEventForm(request.POST, request.FILES)
         if form.is_valid():
             event = form.save(commit=False)
             if get_user_role(request.user) != UserRole.ROLE_ADMIN:
@@ -1037,7 +1037,7 @@ def organizer_event_create(request):
 def organizer_event_edit(request, event_id):
     event = get_object_or_404(_organizer_event_queryset(request), id=event_id)
     if request.method == "POST":
-        form = OrganizerEventForm(request.POST, instance=event)
+        form = OrganizerEventForm(request.POST, request.FILES, instance=event)
         if form.is_valid():
             event = form.save(commit=False)
             event.save()

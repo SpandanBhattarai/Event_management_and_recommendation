@@ -47,7 +47,7 @@
     {% endif %}
 
     <div class="event-card">
-      <form method="post" novalidate>
+      <form method="post" enctype="multipart/form-data" novalidate>
         {% csrf_token %}
         <div class="row g-3">
           <div class="col-md-6">
@@ -69,6 +69,16 @@
             <label class="form-label" for="{{ form.description.id_for_label }}">Description</label>
             {{ form.description }}
             {% if form.description.errors %}<small class="text-danger">{{ form.description.errors|striptags }}</small>{% endif %}
+          </div>
+          <div class="col-12">
+            <label class="form-label" for="{{ form.image.id_for_label }}">Event Image</label>
+            {{ form.image }}
+            {% if form.image.errors %}<small class="text-danger">{{ form.image.errors|striptags }}</small>{% endif %}
+            {% if event and event.image %}
+            <div class="mt-2">
+              <img src="{{ event.image.url }}" alt="{{ event.title }}" class="event-form-image-preview">
+            </div>
+            {% endif %}
           </div>
           <div class="col-md-3">
             <label class="form-label" for="{{ form.start_date.id_for_label }}">Start Date</label>

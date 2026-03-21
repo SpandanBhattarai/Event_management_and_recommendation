@@ -81,8 +81,8 @@
                     >Admin Dashboard</a
                   >
                 </li>
-                {% endif %} {% if user_role == "organizer" or user_role ==
-                "admin" %}
+                {% endif %}
+                {% if user_role == "organizer" or user_role == "admin" %}
                 <li>
                   <a
                     class="dropdown-item"
@@ -170,13 +170,7 @@
                     {% for category in categories %}
                     <option
                       value="{{ category.id }}"
-                      {%
-                      if
-                      preferences.favorite_category_id=""
-                      ="category.id"
-                      %}selected{%
-                      endif
-                      %}
+                      {% if preferences.favorite_category_id == category.id %}selected{% endif %}
                     >
                       {{ category.name }}
                     </option>

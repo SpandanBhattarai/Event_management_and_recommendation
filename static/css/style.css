@@ -349,6 +349,29 @@ main.pt-4 {
   background: var(--bg-soft);
 }
 
+.event-detail-image-wrap {
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--bg-soft);
+}
+
+.event-detail-image {
+  width: 100%;
+  max-height: 360px;
+  object-fit: cover;
+  display: block;
+}
+
+.event-form-image-preview {
+  width: 100%;
+  max-width: 280px;
+  max-height: 180px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+}
+
 .cta-banner {
   border-radius: 24px;
   padding: 2.4rem 1.5rem;

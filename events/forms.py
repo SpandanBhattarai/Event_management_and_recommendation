@@ -18,6 +18,7 @@ class OrganizerEventForm(forms.ModelForm):
         fields = [
             "title",
             "description",
+            "image",
             "venue",
             "category",
             "start_date",
