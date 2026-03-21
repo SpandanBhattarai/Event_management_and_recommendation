@@ -77,12 +77,18 @@
                 </li>
                 {% if user_role == "admin" %}
                 <li>
-                  <a class="dropdown-item" href="{% url 'admin_dashboard' %}">Admin Dashboard</a>
+                  <a class="dropdown-item" href="{% url 'admin_dashboard' %}"
+                    >Admin Dashboard</a
+                  >
                 </li>
-                {% endif %}
-                {% if user_role == "organizer" or user_role == "admin" %}
+                {% endif %} {% if user_role == "organizer" or user_role ==
+                "admin" %}
                 <li>
-                  <a class="dropdown-item" href="{% url 'organizer_dashboard' %}">Organizer Dashboard</a>
+                  <a
+                    class="dropdown-item"
+                    href="{% url 'organizer_dashboard' %}"
+                    >Organizer Dashboard</a
+                  >
                 </li>
                 {% endif %}
                 <li>
@@ -162,7 +168,16 @@
                   >
                     <option value="">Select a category</option>
                     {% for category in categories %}
-                    <option value="{{ category.id }}" {% if preferences.favorite_category_id == category.id %}selected{% endif %}>
+                    <option
+                      value="{{ category.id }}"
+                      {%
+                      if
+                      preferences.favorite_category_id=""
+                      ="category.id"
+                      %}selected{%
+                      endif
+                      %}
+                    >
                       {{ category.name }}
                     </option>
                     {% endfor %}

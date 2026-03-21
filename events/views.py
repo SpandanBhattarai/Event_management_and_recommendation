@@ -1040,8 +1040,6 @@ def organizer_event_edit(request, event_id):
         form = OrganizerEventForm(request.POST, instance=event)
         if form.is_valid():
             event = form.save(commit=False)
-            if get_user_role(request.user) != UserRole.ROLE_ADMIN and not event.organizer:
-                event.organizer = request.user
             event.save()
             messages.success(request, "Event updated.")
             return redirect("organizer_dashboard")
@@ -1064,6 +1062,9 @@ def organizer_event_edit(request, event_id):
 @role_required(UserRole.ROLE_ADMIN, UserRole.ROLE_ORGANIZER)
 def organizer_event_delete(request, event_id):
     event = get_object_or_404(_organizer_event_queryset(request), id=event_id)
+    if get_user_role(request.user) != UserRole.ROLE_ADMIN and event.organizer_id != request.user.id:
+        messages.error(request, "Only the event organizer can delete this event.")
+        return redirect("organizer_dashboard")
     event_title = event.title
     event.delete()
     messages.warning(request, f"Deleted event: {event_title}")
@@ -1074,6 +1075,9 @@ def organizer_event_delete(request, event_id):
 @role_required(UserRole.ROLE_ADMIN, UserRole.ROLE_ORGANIZER)
 def organizer_event_attendees_csv(request, event_id):
     event = get_object_or_404(_organizer_event_queryset(request), id=event_id)
+    if get_user_role(request.user) != UserRole.ROLE_ADMIN and event.organizer_id != request.user.id:
+        messages.error(request, "Only the event organizer can download attendee data.")
+        return redirect("organizer_dashboard")
     rows = (
         TicketPurchase.objects.filter(event=event, status=TicketPurchase.STATUS_COMPLETED)
         .select_related("user")
