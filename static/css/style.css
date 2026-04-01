@@ -372,6 +372,26 @@ main.pt-4 {
   border: 1px solid var(--line);
 }
 
+.similar-event-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.similar-event-image-wrap {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--bg-soft);
+}
+
+.similar-event-image {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  display: block;
+}
+
+
 .cta-banner {
   border-radius: 24px;
   padding: 2.4rem 1.5rem;

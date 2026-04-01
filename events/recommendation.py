@@ -7,6 +7,9 @@ from .models import Event, TicketPurchase, UserPreference
 # module logger
 logger = logging.getLogger(__name__)
 
+NEARBY_REASON_DISTANCE_KM = 15
+BUDGET_REASON_MIN_SCORE = 0.7
+
 # Haversine Formula
 def calculate_distance(lat1, lon1, lat2, lon2):
     R = 6371  # Earth radius in km
@@ -105,29 +108,18 @@ def calculate_final_score(category_score, budget_score, distance_score, populari
         + (recency_score * 0.20)
     )
 
-# MAIN FUNCTION
-def get_recommended_events(request):
 
-    events = Event.objects.filter(
-        is_active=True,
-        approval_status=Event.APPROVAL_APPROVED,
-    ).select_related("category", "venue")
-    scored_events = []
-
+def _build_recommendation_context(request):
     user_lat = request.session.get("user_lat")
     user_lng = request.session.get("user_lng")
-    # Use saved profile preferences as primary source.
-    # Session values are kept as fallback for older flows.
     user_budget = None
     user_category = None
     user_category_id = None
     user_category_name = None
 
-    # Learn user category preference from purchased ticket history.
     category_counts = Counter()
     max_category_count = 0
     if request.user.is_authenticated:
-        # Always read latest preferences from DB to avoid stale relation cache.
         preferences = (
             UserPreference.objects.filter(user_id=request.user.id)
             .only("budget", "favorite_category_id")
@@ -152,7 +144,6 @@ def get_recommended_events(request):
 
     if user_budget is None:
         user_budget = request.session.get("budget")
-        # coerce session value to float and handle bad data
         if user_budget is not None:
             try:
                 user_budget = float(user_budget)
@@ -168,166 +159,36 @@ def get_recommended_events(request):
             user_category_id = int(user_category)
         else:
             user_category_name = str(user_category).strip().lower()
-    has_explicit_category_preference = bool(user_category_id or user_category_name)
 
-    print(
-        f"[reco] user={request.user.username if request.user.is_authenticated else 'anon'} "
-        f"budget={user_budget} category_id={user_category_id} category_name={user_category_name} "
-        f"lat={user_lat} lng={user_lng}",
-        flush=True,
-    )
-
-    for event in events:
-
-        category_score = get_category_score(
-            event,
-            user_category_id=user_category_id,
-            user_category_name=user_category_name,
-            has_explicit_category_preference=has_explicit_category_preference,
-            category_counts=category_counts,
-            max_category_count=max_category_count,
-        )
-
-        #Budget Match
-        budget_score = get_budget_score(event.price, user_budget)
-
-        #Distance Score
-        distance_score = 0
-        if user_lat and user_lng:
-            distance = calculate_distance(
-                float(user_lat),
-                float(user_lng),
-                event.venue.latitude,
-                event.venue.longitude,
-            )
-            distance_score = get_distance_score(distance)
-
-        #Popularity Score
-        popularity_score = normalize(event.popularity, 5)
-
-        #Upcoming Events Boost
-        recency_score = get_recency_score(event)
-
-        #Weighted Final Score
-        final_score = calculate_final_score(
-            category_score,
-            budget_score,
-            distance_score,
-            popularity_score,
-            recency_score,
-        )
-
-        scored_events.append((event, final_score))
-
-    # Sort descending
-    scored_events.sort(key=lambda x: x[1], reverse=True)
-
-    # show the calculated score in the terminal for debugging
-    for event, score in scored_events:
-        category_score = get_category_score(
-            event,
-            user_category_id=user_category_id,
-            user_category_name=user_category_name,
-            has_explicit_category_preference=has_explicit_category_preference,
-            category_counts=category_counts,
-            max_category_count=max_category_count,
-        )
-
-        budget_score = get_budget_score(event.price, user_budget)
-
-        distance_score = 0
-        if user_lat and user_lng:
-            distance = calculate_distance(
-                float(user_lat),
-                float(user_lng),
-                event.venue.latitude,
-                event.venue.longitude,
-            )
-            distance_score = get_distance_score(distance)
-
-        popularity_score = normalize(event.popularity, 5)
-        recency_score = get_recency_score(event)
-
-        print(
-            f"Event: {event.title} | "
-            f"cat={category_score:.4f}({category_score * 0.30:.4f}) "
-            f"budget={budget_score:.4f}({budget_score * 0.20:.4f}) "
-            f"dist={distance_score:.4f}({distance_score * 0.15:.4f}) "
-            f"pop={popularity_score:.4f}({popularity_score * 0.15:.4f}) "
-            f"recency={recency_score:.4f}({recency_score * 0.20:.4f}) "
-            f"total={score:.4f}",
-            flush=True,
-        )
-    
-    return [event[0] for event in scored_events]
+    return {
+        "user_lat": user_lat,
+        "user_lng": user_lng,
+        "user_budget": user_budget,
+        "user_category_id": user_category_id,
+        "user_category_name": user_category_name,
+        "has_explicit_category_preference": bool(user_category_id or user_category_name),
+        "category_counts": category_counts,
+        "max_category_count": max_category_count,
+    }
 
 
-def get_event_final_score(request, event):
-    user_lat = request.session.get("user_lat")
-    user_lng = request.session.get("user_lng")
-    user_budget = None
-    user_category = None
-    user_category_id = None
-    user_category_name = None
-
-    category_counts = Counter()
-    max_category_count = 0
-    if request.user.is_authenticated:
-        preferences = (
-            UserPreference.objects.filter(user_id=request.user.id)
-            .only("budget", "favorite_category_id")
-            .first()
-        )
-        if preferences:
-            if preferences.budget is not None:
-                user_budget = float(preferences.budget)
-            if preferences.favorite_category_id:
-                user_category_id = preferences.favorite_category_id
-        purchased_tickets = (
-            TicketPurchase.objects.filter(
-                user=request.user,
-                status=TicketPurchase.STATUS_COMPLETED,
-                event__category__isnull=False,
-            )
-            .select_related("event__category")
-        )
-        category_counts = Counter(ticket.event.category_id for ticket in purchased_tickets)
-        if category_counts:
-            max_category_count = max(category_counts.values())
-
-    if user_budget is None:
-        user_budget = request.session.get("budget")
-        if user_budget is not None:
-            try:
-                user_budget = float(user_budget)
-            except (ValueError, TypeError):
-                user_budget = None
-
-    if not user_category_id:
-        user_category = request.session.get("preferred_category")
-
-    if user_category:
-        if str(user_category).isdigit():
-            user_category_id = int(user_category)
-        else:
-            user_category_name = str(user_category).strip().lower()
-    has_explicit_category_preference = bool(user_category_id or user_category_name)
-
+def _get_recommendation_data_for_event(event, context):
     category_score = get_category_score(
         event,
-        user_category_id=user_category_id,
-        user_category_name=user_category_name,
-        has_explicit_category_preference=has_explicit_category_preference,
-        category_counts=category_counts,
-        max_category_count=max_category_count,
+        user_category_id=context["user_category_id"],
+        user_category_name=context["user_category_name"],
+        has_explicit_category_preference=context["has_explicit_category_preference"],
+        category_counts=context["category_counts"],
+        max_category_count=context["max_category_count"],
     )
-    budget_score = get_budget_score(event.price, user_budget)
+    budget_score = get_budget_score(event.price, context["user_budget"])
 
-    distance_score = 0
-    if user_lat and user_lng:
+    distance = None
+    distance_score = 0.0
+    if context["user_lat"] and context["user_lng"]:
         distance = calculate_distance(
-            float(user_lat),
-            float(user_lng),
+            float(context["user_lat"]),
+            float(context["user_lng"]),
             event.venue.latitude,
             event.venue.longitude,
         )
@@ -335,7 +196,6 @@ def get_event_final_score(request, event):
 
     popularity_score = normalize(event.popularity, 5)
     recency_score = get_recency_score(event)
-
     final_score = calculate_final_score(
         category_score,
         budget_score,
@@ -343,4 +203,77 @@ def get_event_final_score(request, event):
         popularity_score,
         recency_score,
     )
-    return final_score
+
+    reasons = []
+    if context["has_explicit_category_preference"] and category_score >= 0.8:
+        reasons.append("Matches your preferred category")
+    if distance is not None and distance <= NEARBY_REASON_DISTANCE_KM:
+        reasons.append("Near your location")
+    if context["user_budget"] is not None and budget_score >= BUDGET_REASON_MIN_SCORE:
+        reasons.append("Fits your budget")
+    if not reasons and recency_score >= 0.75:
+        reasons.append("Happening soon")
+    if len(reasons) < 2 and popularity_score >= 0.8:
+        reasons.append("Popular with attendees")
+
+    return {
+        "category_score": category_score,
+        "budget_score": budget_score,
+        "distance": distance,
+        "distance_score": distance_score,
+        "popularity_score": popularity_score,
+        "recency_score": recency_score,
+        "final_score": final_score,
+        "reasons": reasons[:3],
+    }
+
+# MAIN FUNCTION
+def get_recommended_events(request):
+
+    events = Event.objects.filter(
+        is_active=True,
+        is_finished=False,
+        approval_status=Event.APPROVAL_APPROVED,
+    ).select_related("category", "venue")
+    scored_events = []
+
+    context = _build_recommendation_context(request)
+
+    print(
+        f"[reco] user={request.user.username if request.user.is_authenticated else 'anon'} "
+        f"budget={context['user_budget']} category_id={context['user_category_id']} category_name={context['user_category_name']} "
+        f"lat={context['user_lat']} lng={context['user_lng']}",
+        flush=True,
+    )
+
+    for event in events:
+        recommendation_data = _get_recommendation_data_for_event(event, context)
+        event.recommendation_reasons = recommendation_data["reasons"]
+        scored_events.append((event, recommendation_data["final_score"], recommendation_data))
+
+    # Sort descending
+    scored_events.sort(key=lambda x: x[1], reverse=True)
+
+    # show the calculated score in the terminal for debugging
+    for event, score, recommendation_data in scored_events:
+        print(
+            f"Event: {event.title} | "
+            f"cat={recommendation_data['category_score']:.4f}({recommendation_data['category_score'] * 0.30:.4f}) "
+            f"budget={recommendation_data['budget_score']:.4f}({recommendation_data['budget_score'] * 0.20:.4f}) "
+            f"dist={recommendation_data['distance_score']:.4f}({recommendation_data['distance_score'] * 0.15:.4f}) "
+            f"pop={recommendation_data['popularity_score']:.4f}({recommendation_data['popularity_score'] * 0.15:.4f}) "
+            f"recency={recommendation_data['recency_score']:.4f}({recommendation_data['recency_score'] * 0.20:.4f}) "
+            f"total={score:.4f}",
+            flush=True,
+        )
+    
+    return [event for event, _, _ in scored_events]
+
+
+def get_event_final_score(request, event):
+    return get_event_recommendation_data(request, event)["final_score"]
+
+
+def get_event_recommendation_data(request, event):
+    context = _build_recommendation_context(request)
+    return _get_recommendation_data_for_event(event, context)

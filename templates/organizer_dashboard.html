@@ -39,15 +39,16 @@
         <div class="collapse navbar-collapse" id="navbarNav">
           <ul class="navbar-nav mx-auto text-center">
             <li class="nav-item">
-              <a class="nav-link" href="{% url 'home' %}">Home</a>
+              <a class="nav-link {% if request.resolver_match.url_name == 'home' %}active{% endif %}" href="{% url 'home' %}">Home</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" href="{% url 'events' %}">Events</a>
+              <a class="nav-link {% if request.resolver_match.url_name == 'events' or request.resolver_match.url_name == 'event_detail' %}active{% endif %}" href="{% url 'events' %}">Events</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link active" href="{% url 'organizer_dashboard' %}"
-                >Organizer</a
-              >
+              <a class="nav-link {% if request.resolver_match.url_name == 'venues' %}active{% endif %}" href="{% url 'venues' %}">Venues</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link {% if request.resolver_match.url_name == 'contact' %}active{% endif %}" href="{% url 'contact' %}">Contact</a>
             </li>
           </ul>
           <div class="d-flex align-items-center gap-2 justify-content-center">
@@ -59,7 +60,27 @@
             >
               <i class="fa-solid fa-moon"></i>
             </button>
-            <a class="btn btn-sm btn-light" href="{% url 'logout' %}">Logout</a>
+            {% if user.is_authenticated %}
+            <div class="dropdown">
+              <button class="btn btn-sm btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                <i class="fa-solid fa-user"></i> {{ user.username }}
+              </button>
+              <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" href="{% url 'profile_preferences' %}">Profile & Preferences</a></li>
+                {% if user_role == "admin" %}
+                <li><a class="dropdown-item" href="{% url 'admin_dashboard' %}">Admin Dashboard</a></li>
+                {% endif %}
+                {% if user_role == "organizer" or user_role == "admin" %}
+                <li><a class="dropdown-item" href="{% url 'organizer_dashboard' %}">Organizer Dashboard</a></li>
+                {% endif %}
+                <li><a class="dropdown-item" href="{% url 'tickets' %}">My Tickets</a></li>
+                <li><a class="dropdown-item" href="{% url 'logout' %}">Logout</a></li>
+              </ul>
+            </div>
+            {% else %}
+            <a class="btn btn-sm btn-light" href="{% url 'login' %}">Login</a>
+            <a class="btn btn-sm btn-outline-light" href="{% url 'register' %}">Sign Up</a>
+            {% endif %}
           </div>
         </div>
       </div>
@@ -169,9 +190,20 @@
                   <td>{{ event.start_date|date:"M d, Y h:i A" }}</td>
                   <td>{{ event.sold_tickets }}</td>
                   <td>NPR {{ event.revenue }}</td>
-                  <td>{{ event.approval_status|title }}</td>
+                  <td>
+                    {{ event.approval_status|title }}
+                    {% if event.is_finished %}
+                    <br><span class="badge text-bg-secondary mt-1">Finished</span>
+                    {% endif %}
+                  </td>
                   <td>
                     <div class="d-flex gap-2">
+                      <a
+                        href="{% url 'event_detail' event.id %}"
+                        class="btn btn-outline-secondary btn-sm dashboard-action-btn dashboard-manage-btn"
+                        >View</a
+                      >
+                      {% if not event.is_finished %}
                       <a
                         href="{% url 'organizer_event_edit' event.id %}"
                         class="btn btn-outline-brand btn-sm dashboard-action-btn dashboard-manage-btn"
@@ -190,6 +222,22 @@
                           Delete
                         </button>
                       </form>
+                      {% endif %}
+                      {% if user_role == "admin" and not event.is_finished and event.approval_status == "approved" %}
+                      <form
+                        method="post"
+                        action="{% url 'admin_event_finish_action' event.id %}"
+                        onsubmit="return confirm('Mark this event as finished? It will be hidden from public event listings.');"
+                      >
+                        {% csrf_token %}
+                        <button
+                          type="submit"
+                          class="btn btn-outline-dark btn-sm rounded-pill dashboard-action-btn"
+                        >
+                          Finish
+                        </button>
+                      </form>
+                      {% endif %}
                     </div>
                   </td>
                   <td>

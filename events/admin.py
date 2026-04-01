@@ -62,13 +62,14 @@ class EventAdmin(admin.ModelAdmin):
         "title",
         "organizer",
         "approval_status",
+        "is_finished",
         "approved_by",
         "venue",
         "category",
         "start_date",
         "is_active",
     )
-    list_filter = ("approval_status", "is_active", "category", "venue__city", "organizer")
+    list_filter = ("approval_status", "is_active", "is_finished", "category", "venue__city", "organizer")
     search_fields = ("title", "description", "venue__name", "organizer__username")
 
     def save_model(self, request, obj, form, change):

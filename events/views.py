@@ -22,7 +22,7 @@ from django.utils import timezone
 from django.db.models.functions import Coalesce
 from django.views.decorators.http import require_POST
 from .models import AuditLog, Category, Event, TicketPurchase, UserPreference, UserRole, Venue
-from .recommendation import get_event_final_score, get_recommended_events
+from .recommendation import get_event_recommendation_data, get_recommended_events
 from .roles import get_user_role, role_required
 from .forms import OrganizerEventForm
 
@@ -56,6 +56,9 @@ def _can_view_recommendations(user):
 
 
 def _can_book_event(user, event):
+    if event.is_finished:
+        return False, "This event has already finished."
+
     if not user.is_authenticated:
         return False, "Login to reserve tickets and proceed to payment."
 
@@ -69,9 +72,39 @@ def _can_book_event(user, event):
     return True, ""
 
 
+def _get_similar_events(event, limit=3):
+    similar_events = (
+        Event.objects.filter(
+            is_active=True,
+            is_finished=False,
+            approval_status=Event.APPROVAL_APPROVED,
+            start_date__gte=timezone.now(),
+        )
+        .exclude(id=event.id)
+        .select_related("venue", "category")
+    )
+
+    similarity_filter = Q(venue__city=event.venue.city)
+    if event.category_id:
+        similarity_filter |= Q(category_id=event.category_id)
+
+    candidates = list(similar_events.filter(similarity_filter).order_by("start_date")[:12])
+
+    def similarity_rank(candidate):
+        score = 0
+        if event.category_id and candidate.category_id == event.category_id:
+            score += 2
+        if candidate.venue.city == event.venue.city:
+            score += 1
+        return (-score, candidate.start_date)
+
+    candidates.sort(key=similarity_rank)
+    return candidates[:limit]
+
+
 def home(request):
     events = (
-        Event.objects.filter(is_active=True, approval_status=Event.APPROVAL_APPROVED)
+        Event.objects.filter(is_active=True, is_finished=False, approval_status=Event.APPROVAL_APPROVED)
         .select_related("venue", "category")
         .order_by("start_date")[:3]
     )
@@ -160,7 +193,7 @@ def events_view(request):
     cities = Venue.objects.values_list("city", flat=True).distinct().order_by("city")
 
     events = (
-        Event.objects.filter(is_active=True, approval_status=Event.APPROVAL_APPROVED)
+        Event.objects.filter(is_active=True, is_finished=False, approval_status=Event.APPROVAL_APPROVED)
         .select_related("venue", "category")
         .order_by("start_date")
     )
@@ -222,17 +255,49 @@ def events_view(request):
 
 def event_detail(request, event_id):
     event = get_object_or_404(
-        Event,
+        Event.objects.filter(approval_status=Event.APPROVAL_APPROVED).filter(
+            Q(is_active=True) | Q(is_finished=True)
+        ),
         id=event_id,
-        is_active=True,
-        approval_status=Event.APPROVAL_APPROVED,
     )
     can_book_event, booking_block_message = _can_book_event(request.user, event)
     final_score = None
     final_score_percent = None
+    recommendation_reasons = []
+    similar_events = _get_similar_events(event)
+    event_revenue = None
+    event_tickets_sold = None
+    can_finish_event = (
+        request.user.is_authenticated
+        and get_user_role(request.user) == UserRole.ROLE_ADMIN
+        and event.approval_status == Event.APPROVAL_APPROVED
+        and not event.is_finished
+    )
+    can_view_event_performance = (
+        request.user.is_authenticated
+        and (
+            get_user_role(request.user) == UserRole.ROLE_ADMIN
+            or event.organizer_id == request.user.id
+        )
+    )
     if _can_view_recommendations(request.user):
-        final_score = get_event_final_score(request, event)
+        recommendation_data = get_event_recommendation_data(request, event)
+        final_score = recommendation_data["final_score"]
         final_score_percent = min(99, final_score * 130)
+        recommendation_reasons = recommendation_data["reasons"]
+    if can_view_event_performance:
+        event_revenue = (
+            TicketPurchase.objects.filter(event=event, status=TicketPurchase.STATUS_COMPLETED)
+            .aggregate(total=Sum("total_amount"))
+            .get("total")
+            or Decimal("0.00")
+        )
+        event_tickets_sold = (
+            TicketPurchase.objects.filter(event=event, status=TicketPurchase.STATUS_COMPLETED)
+            .aggregate(total=Sum("quantity"))
+            .get("total")
+            or 0
+        )
     return render(
         request,
         "event_detail.html",
@@ -242,6 +307,12 @@ def event_detail(request, event_id):
             "booking_block_message": booking_block_message,
             "final_score": final_score,
             "final_score_percent": final_score_percent,
+            "recommendation_reasons": recommendation_reasons,
+            "similar_events": similar_events,
+            "can_finish_event": can_finish_event,
+            "can_view_event_performance": can_view_event_performance,
+            "event_revenue": event_revenue,
+            "event_tickets_sold": event_tickets_sold,
         },
     )
 
@@ -346,6 +417,7 @@ def buy_ticket(request, event_id):
         Event.objects.select_related("venue"),
         id=event_id,
         is_active=True,
+        is_finished=False,
         approval_status=Event.APPROVAL_APPROVED,
     )
     can_book_event, booking_block_message = _can_book_event(request.user, event)
@@ -387,6 +459,7 @@ def buy_ticket(request, event_id):
             Event.objects.select_related("venue").select_for_update(),
             id=event_id,
             is_active=True,
+            is_finished=False,
             approval_status=Event.APPROVAL_APPROVED,
         )
 
@@ -695,8 +768,41 @@ def tickets_view(request):
 @role_required(UserRole.ROLE_ADMIN)
 def admin_dashboard(request):
     total_events = Event.objects.count()
-    active_events = Event.objects.filter(is_active=True).count()
+    active_events = Event.objects.filter(is_active=True, is_finished=False).count()
     pending_events_count = Event.objects.filter(approval_status=Event.APPROVAL_PENDING).count()
+    approved_live_events = (
+        Event.objects.filter(
+            approval_status=Event.APPROVAL_APPROVED,
+            is_active=True,
+            is_finished=False,
+        )
+        .select_related("venue", "category", "organizer")
+        .order_by("start_date")[:20]
+    )
+    finished_events = (
+        Event.objects.filter(approval_status=Event.APPROVAL_APPROVED, is_finished=True)
+        .select_related("venue", "category", "organizer", "finished_by")
+        .annotate(
+            sold_tickets=Coalesce(
+                Sum(
+                    "ticket_purchases__quantity",
+                    filter=Q(ticket_purchases__status=TicketPurchase.STATUS_COMPLETED),
+                ),
+                Value(0, output_field=IntegerField()),
+            ),
+            revenue=Coalesce(
+                Sum(
+                    "ticket_purchases__total_amount",
+                    filter=Q(ticket_purchases__status=TicketPurchase.STATUS_COMPLETED),
+                ),
+                Value(
+                    Decimal("0.00"),
+                    output_field=DecimalField(max_digits=10, decimal_places=2),
+                ),
+            ),
+        )
+        .order_by("-finished_at", "-start_date")[:20]
+    )
     total_venues = Venue.objects.count()
     total_users = User.objects.count()
     total_sales = (
@@ -769,6 +875,7 @@ def admin_dashboard(request):
             "total_events": total_events,
             "active_events": active_events,
             "pending_events_count": pending_events_count,
+            "approved_live_events": approved_live_events,
             "total_venues": total_venues,
             "total_users": total_users,
             "total_sales": total_sales,
@@ -777,6 +884,7 @@ def admin_dashboard(request):
             "top_earning_event": top_earning_event,
             "recent_purchases": purchases,
             "pending_events": pending_events,
+            "finished_events": finished_events,
             "user_rows": user_rows,
             "payment_rows": payment_rows,
             "payment_filter_users": payment_filter_users,
@@ -828,6 +936,31 @@ def admin_event_approval_action(request, event_id):
         messages.error(request, "Invalid action.")
 
     return redirect("admin_dashboard")
+
+
+@login_required
+@role_required(UserRole.ROLE_ADMIN)
+@require_POST
+def admin_event_finish_action(request, event_id):
+    event = get_object_or_404(Event, id=event_id, approval_status=Event.APPROVAL_APPROVED)
+
+    if event.is_finished:
+        messages.info(request, f"Event already marked as finished: {event.title}")
+        return redirect("organizer_dashboard")
+
+    event.is_finished = True
+    event.finished_at = timezone.now()
+    event.finished_by = request.user
+    event.save(update_fields=["is_finished", "finished_at", "finished_by"])
+    log_admin_action(
+        request.user,
+        AuditLog.ACTION_EVENT_FINISHED,
+        target_user=event.organizer,
+        event=event,
+        details=f"Event marked as finished: {event.title}",
+    )
+    messages.success(request, f"Marked event as finished: {event.title}")
+    return redirect("organizer_dashboard")
 
 
 @login_required
@@ -916,7 +1049,7 @@ def organizer_dashboard(request):
     my_events_count = base_events.count()
     my_total_revenue = purchases.aggregate(total=Sum("total_amount")).get("total") or Decimal("0.00")
     total_tickets_sold = purchases.aggregate(total=Sum("quantity")).get("total") or 0
-    upcoming_events_count = base_events.filter(start_date__gte=now, is_active=True).count()
+    upcoming_events_count = base_events.filter(start_date__gte=now, is_active=True, is_finished=False).count()
 
     event_rows = (
         base_events.annotate(

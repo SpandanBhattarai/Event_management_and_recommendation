@@ -21,15 +21,36 @@
     </button>
     <div class="collapse navbar-collapse" id="navbarNav">
       <ul class="navbar-nav mx-auto text-center">
-        <li class="nav-item"><a class="nav-link" href="{% url 'home' %}">Home</a></li>
-        <li class="nav-item"><a class="nav-link" href="{% url 'events' %}">Events</a></li>
-        <li class="nav-item"><a class="nav-link active" href="{% url 'admin_dashboard' %}">Admin</a></li>
+        <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'home' %}active{% endif %}" href="{% url 'home' %}">Home</a></li>
+        <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'events' or request.resolver_match.url_name == 'event_detail' %}active{% endif %}" href="{% url 'events' %}">Events</a></li>
+        <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'venues' %}active{% endif %}" href="{% url 'venues' %}">Venues</a></li>
+        <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'contact' %}active{% endif %}" href="{% url 'contact' %}">Contact</a></li>
       </ul>
       <div class="d-flex align-items-center gap-2 justify-content-center">
         <button class="btn btn-sm theme-toggle" id="themeToggle" type="button" aria-label="Toggle theme">
           <i class="fa-solid fa-moon"></i>
         </button>
-        <a class="btn btn-sm btn-light" href="{% url 'logout' %}">Logout</a>
+        {% if user.is_authenticated %}
+        <div class="dropdown">
+          <button class="btn btn-sm btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+            <i class="fa-solid fa-user"></i> {{ user.username }}
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="{% url 'profile_preferences' %}">Profile & Preferences</a></li>
+            {% if user_role == "admin" %}
+            <li><a class="dropdown-item" href="{% url 'admin_dashboard' %}">Admin Dashboard</a></li>
+            {% endif %}
+            {% if user_role == "organizer" or user_role == "admin" %}
+            <li><a class="dropdown-item" href="{% url 'organizer_dashboard' %}">Organizer Dashboard</a></li>
+            {% endif %}
+            <li><a class="dropdown-item" href="{% url 'tickets' %}">My Tickets</a></li>
+            <li><a class="dropdown-item" href="{% url 'logout' %}">Logout</a></li>
+          </ul>
+        </div>
+        {% else %}
+        <a class="btn btn-sm btn-light" href="{% url 'login' %}">Login</a>
+        <a class="btn btn-sm btn-outline-light" href="{% url 'register' %}">Sign Up</a>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -100,6 +121,63 @@
             </tr>
             {% empty %}
             <tr><td colspan="5" class="text-center">No pending events.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="event-card mb-4">
+      <h5 class="mb-3">Approved Live Events</h5>
+      <div class="table-responsive">
+        <table class="table mb-0">
+          <thead>
+            <tr><th>Event</th><th>Organizer</th><th>Venue</th><th>Start</th><th>Action</th></tr>
+          </thead>
+          <tbody>
+            {% for event in approved_live_events %}
+            <tr>
+              <td>{{ event.title }}</td>
+              <td>{{ event.organizer.username|default:"N/A" }}</td>
+              <td>{{ event.venue.city }} - {{ event.venue.name }}</td>
+              <td>{{ event.start_date|date:"M d, Y h:i A" }}</td>
+              <td>
+                <div class="d-flex gap-2">
+                  <a href="{% url 'event_detail' event.id %}" class="btn btn-outline-brand btn-sm">View</a>
+                  <form method="post" action="{% url 'admin_event_finish_action' event.id %}" onsubmit="return confirm('Mark this event as finished? It will be hidden from public event listings.');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-brand btn-sm">Finish</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center">No approved live events available.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="event-card mb-4">
+      <h5 class="mb-3">Finished Events</h5>
+      <div class="table-responsive">
+        <table class="table mb-0">
+          <thead>
+            <tr><th>Event</th><th>Organizer</th><th>Finished At</th><th>Tickets Sold</th><th>Revenue</th><th>Details</th></tr>
+          </thead>
+          <tbody>
+            {% for event in finished_events %}
+            <tr>
+              <td>{{ event.title }}</td>
+              <td>{{ event.organizer.username|default:"N/A" }}</td>
+              <td>{{ event.finished_at|date:"M d, Y h:i A"|default:"-" }}</td>
+              <td>{{ event.sold_tickets }}</td>
+              <td>NPR {{ event.revenue }}</td>
+              <td><a href="{% url 'event_detail' event.id %}" class="btn btn-outline-brand btn-sm">View</a></td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="text-center">No finished events yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>

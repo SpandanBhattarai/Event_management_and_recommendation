@@ -96,6 +96,15 @@ class Event(models.Model):
         related_name="approved_events",
     )
     approved_at = models.DateTimeField(null=True, blank=True)
+    is_finished = models.BooleanField(default=False, db_index=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    finished_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="finished_events",
+    )
     image = models.ImageField(upload_to="events/", null=True, blank=True)
 
     class Meta:
@@ -165,6 +174,7 @@ class AuditLog(models.Model):
     ACTION_USER_DEACTIVATED = "user_deactivated"
     ACTION_EVENT_APPROVED = "event_approved"
     ACTION_EVENT_REJECTED = "event_rejected"
+    ACTION_EVENT_FINISHED = "event_finished"
 
     ACTION_CHOICES = [
         (ACTION_ROLE_CHANGED, "Role Changed"),
@@ -172,6 +182,7 @@ class AuditLog(models.Model):
         (ACTION_USER_DEACTIVATED, "User Deactivated"),
         (ACTION_EVENT_APPROVED, "Event Approved"),
         (ACTION_EVENT_REJECTED, "Event Rejected"),
+        (ACTION_EVENT_FINISHED, "Event Finished"),
     ]
 
     actor = models.ForeignKey(

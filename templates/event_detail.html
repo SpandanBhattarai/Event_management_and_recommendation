@@ -150,10 +150,34 @@
               </div>
               {% endif %}
               <h1 class="section-title mb-2">{{ event.title }}</h1>
+              {% if event.is_finished %}
+              <p class="event-meta mb-2">
+                <i class="fa-solid fa-flag-checkered me-2"></i>This event has finished.
+              </p>
+              {% endif %}
+              {% if can_finish_event %}
+              <form
+                method="post"
+                action="{% url 'admin_event_finish_action' event.id %}"
+                class="mb-3"
+                onsubmit="return confirm('Mark this event as finished? It will be hidden from public event listings.');"
+              >
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline-brand btn-sm">
+                  Finish Event
+                </button>
+              </form>
+              {% endif %}
               {% if user.is_authenticated and final_score_percent is not None %}
               <p class="event-meta mb-2">
                 <i class="fa-solid fa-star me-2"></i>Recommended Match Score: {{ final_score_percent|floatformat:0 }}%
               </p>
+              {% if recommendation_reasons %}
+              <p class="event-meta mb-3">
+                <i class="fa-solid fa-circle-info me-2"></i>
+                {{ recommendation_reasons|join:", " }}
+              </p>
+              {% endif %}
               {% endif %}
               <p class="section-subtitle mb-3">{{ event.description }}</p>
               <div class="row g-3">
@@ -168,6 +192,13 @@
                   <p class="event-meta mb-2"><i class="fa-solid fa-users me-2"></i>Capacity: {{ event.venue.capacity }}</p>
                 </div>
               </div>
+              {% if event.is_finished and can_view_event_performance %}
+              <div class="ticket-panel mt-4">
+                <h5 class="mb-2">Event Performance</h5>
+                <p class="event-meta mb-2"><i class="fa-solid fa-ticket me-2"></i>Tickets Sold: {{ event_tickets_sold }}</p>
+                <p class="event-meta mb-0"><i class="fa-solid fa-sack-dollar me-2"></i>Total Revenue: NPR {{ event_revenue }}</p>
+              </div>
+              {% endif %}
             </div>
           </div>
 
@@ -254,6 +285,37 @@
             </div>
           </div>
         </section>
+
+        {% if similar_events %}
+        <section class="mt-5">
+          <div class="d-flex justify-content-between align-items-end mb-3">
+            <div>
+              <h2 class="section-title mb-1">Similar Events</h2>
+              <p class="section-subtitle mb-0">More events you might want to explore.</p>
+            </div>
+          </div>
+          <div class="row event-grid">
+            {% for similar_event in similar_events %}
+            <div class="col-lg-4 col-md-6">
+              <article class="event-card similar-event-card">
+                {% if similar_event.image %}
+                <div class="similar-event-image-wrap mb-3">
+                  <img src="{{ similar_event.image.url }}" alt="{{ similar_event.title }}" class="similar-event-image">
+                </div>
+                {% endif %}
+                <h5 class="mb-2">{{ similar_event.title }}</h5>
+                <p class="event-meta mb-2"><i class="fa-regular fa-calendar me-2"></i>{{ similar_event.start_date|date:"M d, Y h:i A" }}</p>
+                <p class="event-meta mb-2"><i class="fa-solid fa-location-dot me-2"></i>{{ similar_event.venue.city }} - {{ similar_event.venue.name }}</p>
+                <p class="event-meta mb-2"><i class="fa-solid fa-layer-group me-2"></i>{{ similar_event.category.name|default:"General" }}</p>
+                <p class="event-price mb-2">NPR {{ similar_event.price }}</p>
+                <p class="section-subtitle mb-3">{{ similar_event.description|truncatechars:100 }}</p>
+                <a href="{% url 'event_detail' similar_event.id %}" class="btn btn-outline-brand btn-sm">View Details</a>
+              </article>
+            </div>
+            {% endfor %}
+          </div>
+        </section>
+        {% endif %}
       </div>
     </main>
 

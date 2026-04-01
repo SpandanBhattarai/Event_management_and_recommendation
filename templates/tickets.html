@@ -38,17 +38,16 @@
         <div class="collapse navbar-collapse" id="navbarNav">
           <ul class="navbar-nav mx-auto text-center">
             <li class="nav-item">
-              <a class="nav-link" href="{% url 'home' %}">Home</a>
+              <a class="nav-link {% if request.resolver_match.url_name == 'home' %}active{% endif %}" href="{% url 'home' %}">Home</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" href="{% url 'events' %}">Events</a>
+              <a class="nav-link {% if request.resolver_match.url_name == 'events' or request.resolver_match.url_name == 'event_detail' %}active{% endif %}" href="{% url 'events' %}">Events</a>
             </li>
             <li class="nav-item">
-              <a
-                class="nav-link {% if request.resolver_match.url_name == 'tickets' %}active{% endif %}"
-                href="{% url 'tickets' %}"
-                >My Tickets</a
-              >
+              <a class="nav-link {% if request.resolver_match.url_name == 'venues' %}active{% endif %}" href="{% url 'venues' %}">Venues</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link {% if request.resolver_match.url_name == 'contact' %}active{% endif %}" href="{% url 'contact' %}">Contact</a>
             </li>
           </ul>
           <div class="d-flex align-items-center gap-2 justify-content-center">
@@ -60,7 +59,27 @@
             >
               <i class="fa-solid fa-moon"></i>
             </button>
-            <a class="btn btn-sm btn-light" href="{% url 'logout' %}">Logout</a>
+            {% if user.is_authenticated %}
+            <div class="dropdown">
+              <button class="btn btn-sm btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                <i class="fa-solid fa-user"></i> {{ user.username }}
+              </button>
+              <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" href="{% url 'profile_preferences' %}">Profile & Preferences</a></li>
+                {% if user_role == "admin" %}
+                <li><a class="dropdown-item" href="{% url 'admin_dashboard' %}">Admin Dashboard</a></li>
+                {% endif %}
+                {% if user_role == "organizer" or user_role == "admin" %}
+                <li><a class="dropdown-item" href="{% url 'organizer_dashboard' %}">Organizer Dashboard</a></li>
+                {% endif %}
+                <li><a class="dropdown-item" href="{% url 'tickets' %}">My Tickets</a></li>
+                <li><a class="dropdown-item" href="{% url 'logout' %}">Logout</a></li>
+              </ul>
+            </div>
+            {% else %}
+            <a class="btn btn-sm btn-light" href="{% url 'login' %}">Login</a>
+            <a class="btn btn-sm btn-outline-light" href="{% url 'register' %}">Sign Up</a>
+            {% endif %}
           </div>
         </div>
       </div>
