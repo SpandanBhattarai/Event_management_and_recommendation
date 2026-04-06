@@ -46,18 +46,9 @@ class VenueAdmin(admin.ModelAdmin):
 class CategoryAdmin(admin.ModelAdmin):
     pass
 
-
-class EventAdminForm(forms.ModelForm):
-    popularity = forms.IntegerField(min_value=1, max_value=5)
-
-    class Meta:
-        model = Event
-        fields = "__all__"
-
-
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
-    form = EventAdminForm
+    exclude = ("popularity",)
     list_display = (
         "title",
         "organizer",

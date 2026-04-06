@@ -3,3 +3,4 @@ Django==6.0.2
 Pillow==11.3.0
 sqlparse==0.5.5
 tzdata==2025.3
+xhtml2pdf==0.2.17

@@ -1,4 +1,5 @@
 import json
+import logging
 import uuid
 import csv
 from datetime import timedelta
@@ -22,11 +23,13 @@ from django.utils import timezone
 from django.db.models.functions import Coalesce
 from django.views.decorators.http import require_POST
 from .models import AuditLog, Category, Event, TicketPurchase, UserPreference, UserRole, Venue
-from .recommendation import get_event_recommendation_data, get_recommended_events
+from .recommendation import get_event_popularity_score, get_event_recommendation_data, get_recommended_events
 from .roles import get_user_role, role_required
 from .forms import OrganizerEventForm
+from .email_utils import send_ticket_email
 
 RESERVATION_HOLD_MINUTES = 15
+logger = logging.getLogger(__name__)
 
 
 def log_admin_action(actor, action, target_user=None, event=None, ticket_purchase=None, details=""):
@@ -189,6 +192,7 @@ def events_view(request):
     selected_category = request.GET.get("category")
     selected_city = request.GET.get("city", "").strip()
     selected_max_price = request.GET.get("max_price", "").strip()
+    selected_sort = request.GET.get("sort", "date").strip()
     categories = Category.objects.order_by("name")
     cities = Venue.objects.values_list("city", flat=True).distinct().order_by("city")
 
@@ -231,10 +235,57 @@ def events_view(request):
             selected_max_price = ""
 
     recommended = recommended[:3]
+    show_recommendations = _can_view_recommendations(request.user)
+    if selected_sort == "price_asc":
+        events = events.order_by("price", "start_date")
+    elif selected_sort == "price_desc":
+        events = events.order_by("-price", "start_date")
+    elif selected_sort == "popularity":
+        scored_events = []
+        for event in events:
+            event.predicted_popularity_score = get_event_popularity_score(event)
+            scored_events.append(event)
+        scored_events.sort(
+            key=lambda event: (getattr(event, "predicted_popularity_score", 0), event.start_date),
+            reverse=True,
+        )
+        events = scored_events
+    elif selected_sort == "recommendation":
+        if show_recommendations:
+            scored_events = []
+            for event in events:
+                recommendation_data = get_event_recommendation_data(request, event)
+                event.recommendation_sort_score = recommendation_data["final_score"]
+                scored_events.append(event)
+            scored_events.sort(
+                key=lambda event: (getattr(event, "recommendation_sort_score", 0), event.start_date),
+                reverse=True,
+            )
+            events = scored_events
+        else:
+            selected_sort = "date"
+            events = events.order_by("start_date")
+    else:
+        selected_sort = "date"
+        events = events.order_by("start_date")
+
     events_paginator = Paginator(events, 9)
     events_page = events_paginator.get_page(request.GET.get("page"))
+    for event in events_page:
+        event.predicted_popularity_score = getattr(
+            event,
+            "predicted_popularity_score",
+            get_event_popularity_score(event),
+        )
+        event.predicted_popularity_percent = round(event.predicted_popularity_score * 100)
 
-    show_recommendations = _can_view_recommendations(request.user)
+    for event in recommended:
+        event.predicted_popularity_score = getattr(
+            event,
+            "predicted_popularity_score",
+            get_event_popularity_score(event),
+        )
+        event.predicted_popularity_percent = round(event.predicted_popularity_score * 100)
 
     return render(
         request,
@@ -249,6 +300,7 @@ def events_view(request):
             "cities": cities,
             "selected_city": selected_city,
             "selected_max_price": selected_max_price,
+            "selected_sort": selected_sort,
         },
     )
 
@@ -263,15 +315,21 @@ def event_detail(request, event_id):
     can_book_event, booking_block_message = _can_book_event(request.user, event)
     final_score = None
     final_score_percent = None
+    predicted_popularity_score = get_event_popularity_score(event)
+    predicted_popularity_percent = round(predicted_popularity_score * 100)
     recommendation_reasons = []
     similar_events = _get_similar_events(event)
     event_revenue = None
     event_tickets_sold = None
+    user_role = get_user_role(request.user) if request.user.is_authenticated else None
     can_finish_event = (
         request.user.is_authenticated
-        and get_user_role(request.user) == UserRole.ROLE_ADMIN
         and event.approval_status == Event.APPROVAL_APPROVED
         and not event.is_finished
+        and (
+            user_role == UserRole.ROLE_ADMIN
+            or event.organizer_id == request.user.id
+        )
     )
     can_view_event_performance = (
         request.user.is_authenticated
@@ -307,6 +365,8 @@ def event_detail(request, event_id):
             "booking_block_message": booking_block_message,
             "final_score": final_score,
             "final_score_percent": final_score_percent,
+            "predicted_popularity_score": predicted_popularity_score,
+            "predicted_popularity_percent": predicted_popularity_percent,
             "recommendation_reasons": recommendation_reasons,
             "similar_events": similar_events,
             "can_finish_event": can_finish_event,
@@ -733,6 +793,18 @@ def khalti_return(request):
                     merged_target.save(update_fields=["quantity", "total_amount", "khalti_txn_id"])
                     ticket.delete()
                     ticket = merged_target
+            try:
+                if not send_ticket_email(ticket):
+                    messages.warning(
+                        request,
+                        "Payment completed, but no email was sent because your account has no email address.",
+                    )
+            except Exception:
+                logger.exception("Failed to send ticket email for purchase %s", ticket.id)
+                messages.warning(
+                    request,
+                    "Payment completed, but we could not send your ticket email right now.",
+                )
         messages.success(request, "Payment completed successfully.")
     elif status == "User canceled":
         if ticket:
@@ -777,8 +849,9 @@ def admin_dashboard(request):
             is_finished=False,
         )
         .select_related("venue", "category", "organizer")
-        .order_by("start_date")[:20]
+        .order_by("start_date")
     )
+
     finished_events = (
         Event.objects.filter(approval_status=Event.APPROVAL_APPROVED, is_finished=True)
         .select_related("venue", "category", "organizer", "finished_by")
@@ -801,7 +874,7 @@ def admin_dashboard(request):
                 ),
             ),
         )
-        .order_by("-finished_at", "-start_date")[:20]
+        .order_by("-finished_at", "-start_date")
     )
     total_venues = Venue.objects.count()
     total_users = User.objects.count()
@@ -843,7 +916,7 @@ def admin_dashboard(request):
     if payment_date_to:
         payment_qs = payment_qs.filter(created_at__date__lte=payment_date_to)
 
-    payment_rows = payment_qs[:50]
+    payment_rows = payment_qs
 
     users = (
         User.objects.all()
@@ -865,7 +938,7 @@ def admin_dashboard(request):
         .select_related("venue", "category", "organizer")
         .order_by("start_date")
     )[:20]
-    audit_logs = AuditLog.objects.select_related("actor", "target_user", "event", "ticket_purchase")[:30]
+    audit_logs = AuditLog.objects.select_related("actor", "target_user", "event", "ticket_purchase")
     payment_filter_users = User.objects.order_by("username")
     payment_filter_events = Event.objects.order_by("title")
     return render(
@@ -939,10 +1012,15 @@ def admin_event_approval_action(request, event_id):
 
 
 @login_required
-@role_required(UserRole.ROLE_ADMIN)
+@role_required(UserRole.ROLE_ADMIN, UserRole.ROLE_ORGANIZER)
 @require_POST
 def admin_event_finish_action(request, event_id):
     event = get_object_or_404(Event, id=event_id, approval_status=Event.APPROVAL_APPROVED)
+
+    user_role = get_user_role(request.user)
+    if user_role != UserRole.ROLE_ADMIN and event.organizer_id != request.user.id:
+        messages.error(request, "Only the event organizer or an admin can finish this event.")
+        return redirect("organizer_dashboard")
 
     if event.is_finished:
         messages.info(request, f"Event already marked as finished: {event.title}")

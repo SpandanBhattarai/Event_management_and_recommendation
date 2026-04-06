@@ -95,11 +95,6 @@
             {{ form.price }}
             {% if form.price.errors %}<small class="text-danger">{{ form.price.errors|striptags }}</small>{% endif %}
           </div>
-          <div class="col-md-2">
-            <label class="form-label" for="{{ form.popularity.id_for_label }}">Popularity</label>
-            {{ form.popularity }}
-            {% if form.popularity.errors %}<small class="text-danger">{{ form.popularity.errors|striptags }}</small>{% endif %}
-          </div>
           <div class="col-md-2 d-flex align-items-end">
             <div class="form-check">
               {{ form.is_active }}

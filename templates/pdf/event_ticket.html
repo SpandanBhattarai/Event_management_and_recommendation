@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>{{ brand_name }} Ticket</title>
+    <style>
+      @page {
+        size: A4;
+        margin: 16mm;
+      }
+
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: Helvetica, Arial, sans-serif;
+        font-size: 12px;
+        line-height: 1.5;
+        color: #183153;
+        background: #f5f8fc;
+      }
+
+      .ticket {
+        background: #ffffff;
+        border: 1px solid #d9e5f4;
+        border-radius: 18px;
+        overflow: hidden;
+      }
+
+      .header {
+        background: #1f6bff;
+        color: #ffffff;
+        padding: 24px 26px 22px;
+      }
+
+      .brand-name {
+        margin: 14px 0 4px;
+        font-size: 26px;
+        font-weight: bold;
+      }
+
+      .brand-tag {
+        margin: 0;
+        font-size: 12px;
+        color: #dde8ff;
+      }
+
+      .meta-block {
+        margin-top: 18px;
+      }
+
+      .meta-label {
+        margin: 0 0 4px;
+        font-size: 10px;
+        text-transform: uppercase;
+        color: #d7e4ff;
+        font-weight: bold;
+      }
+
+      .meta-value {
+        margin: 0;
+        font-size: 18px;
+        font-weight: bold;
+      }
+
+      .status-badge {
+        display: inline-block;
+        margin-top: 12px;
+        padding: 6px 12px;
+        background: #ffffff;
+        color: {{ status_color }};
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: bold;
+      }
+
+      .booking-date {
+        margin: 12px 0 0;
+        font-size: 12px;
+        color: #e7efff;
+      }
+
+      .content {
+        padding: 24px 26px 26px;
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        font-size: 11px;
+        text-transform: uppercase;
+        color: #3275ff;
+        font-weight: bold;
+      }
+
+      .event-title {
+        margin: 0 0 10px;
+        font-size: 28px;
+        line-height: 1.2;
+        font-weight: bold;
+        color: #162d50;
+      }
+
+      .type-pill {
+        display: inline-block;
+        padding: 6px 10px;
+        background: #e9f1ff;
+        color: #205bd8;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: bold;
+      }
+
+      .divider {
+        margin: 18px 0;
+        border-top: 1px dashed #cfdbeb;
+      }
+
+      .section-heading {
+        margin: 0 0 10px;
+        font-size: 15px;
+        font-weight: bold;
+        color: #163258;
+      }
+
+      .detail-row {
+        margin-bottom: 10px;
+      }
+
+      .label {
+        display: block;
+        margin: 0 0 2px;
+        font-size: 10px;
+        text-transform: uppercase;
+        color: #7689a4;
+        font-weight: bold;
+      }
+
+      .value {
+        display: block;
+        margin: 0;
+        font-size: 13px;
+        color: #183153;
+        font-weight: bold;
+      }
+
+      .ticket-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+      }
+
+      .ticket-table th {
+        background: #edf4ff;
+        color: #28466f;
+        text-align: left;
+        font-size: 11px;
+        padding: 10px 12px;
+        border-bottom: 1px solid #dce8f7;
+      }
+
+      .ticket-table td {
+        padding: 10px 12px;
+        font-size: 12px;
+        color: #183153;
+        border-bottom: 1px solid #ecf2f9;
+      }
+
+      .amount {
+        text-align: right;
+        font-weight: bold;
+      }
+
+      .summary-line {
+        margin: 0 0 8px;
+      }
+
+      .summary-total {
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid #dce6f3;
+      }
+
+      .summary-total .value {
+        font-size: 24px;
+        color: #1657df;
+      }
+
+      .footer {
+        margin-top: 18px;
+        padding-top: 12px;
+        border-top: 1px solid #e3ebf5;
+        font-size: 11px;
+        color: #667b96;
+      }
+
+      .footer p {
+        margin: 4px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="ticket">
+      <div class="header">
+        <div class="brand-name">{{ brand_name }}</div>
+        <p class="brand-tag">Premium event ticket and booking invoice</p>
+
+        <div class="meta-block">
+          <p class="meta-label">Booking ID</p>
+          <p class="meta-value">{{ booking_id }}</p>
+          <span class="status-badge">{{ status_label }}</span>
+          <p class="booking-date">
+            Booked on {{ booking_date|date:"M d, Y" }} at {{
+            booking_date|date:"h:i A" }}
+          </p>
+        </div>
+      </div>
+
+      <div class="content">
+        <p class="eyebrow">Your Event Pass</p>
+        <h1 class="event-title">{{ event_name }}</h1>
+        <span class="type-pill">{{ event_type }}</span>
+
+        <div class="divider"></div>
+
+        <h2 class="section-heading">Event Details</h2>
+        <div class="detail-row">
+          <span class="label">Location</span>
+          <span class="value"
+            >{{ venue_name }}, {{ venue_city }}, {{ venue_address }}</span
+          >
+        </div>
+        <div class="detail-row">
+          <span class="label"> Starts</span>
+          <span class="value"
+            >{{ event_start|date:"M d, Y" }} at {{ event_start|date:"h:i A"
+            }}</span
+          >
+        </div>
+        <div class="detail-row">
+          <span class="label"> Ends</span>
+          <span class="value"
+            >{{ event_end|date:"M d, Y" }} at {{ event_end|date:"h:i A" }}</span
+          >
+        </div>
+
+        <div class="divider"></div>
+
+        <h2 class="section-heading">User Details</h2>
+        <div class="detail-row">
+          <span class="label">Name</span>
+          <span class="value">{{ attendee_name }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">Phone Number</span>
+          <span class="value">{{ attendee_phone }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">Email</span>
+          <span class="value">{{ attendee_email }}</span>
+        </div>
+
+        <div class="divider"></div>
+
+        <h2 class="section-heading">Ticket Details</h2>
+        <table class="ticket-table">
+          <thead>
+            <tr>
+              <th>Ticket Type</th>
+              <th>Quantity</th>
+              <th>Price</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in ticket_rows %}
+            <tr>
+              <td>{{ row.ticket_type }}</td>
+              <td>{{ row.quantity }}</td>
+              <td class="amount">NPR {{ row.price }}</td>
+              <td class="amount">NPR {{ row.total }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <div class="divider"></div>
+
+        <h2 class="section-heading">Payment Summary</h2>
+        <div class="summary-line">
+          <span class="label">Subtotal</span>
+          <span class="value">NPR {{ subtotal }}</span>
+        </div>
+        <div class="summary-total">
+          <span class="label">Total Amount</span>
+          <span class="value">NPR {{ total_amount }}</span>
+        </div>
+
+        <div class="divider"></div>
+
+        <h2 class="section-heading">Transaction Snapshot</h2>
+        <div class="detail-row">
+          <span class="label">Booking Status</span>
+          <span class="value">{{ status_label }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">Transaction ID</span>
+          <span class="value">{{ transaction_id }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">Issued By</span>
+          <span class="value">{{ brand_name }}</span>
+        </div>
+
+        <div class="footer">
+          <p><strong>This is a digitally generated ticket.</strong></p>
+          <p>Support: {{ support_email }} | {{ support_phone }}</p>
+          <p>
+            Terms: non-refundable. Please show this ticket or QR at entry if
+            requested by the organizer.
+          </p>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

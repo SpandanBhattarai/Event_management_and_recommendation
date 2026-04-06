@@ -94,12 +94,18 @@
                 </li>
                 {% if user_role == "admin" %}
                 <li>
-                  <a class="dropdown-item" href="{% url 'admin_dashboard' %}">Admin Dashboard</a>
+                  <a class="dropdown-item" href="{% url 'admin_dashboard' %}"
+                    >Admin Dashboard</a
+                  >
                 </li>
                 {% endif %}
                 {% if user_role == "organizer" or user_role == "admin" %}
                 <li>
-                  <a class="dropdown-item" href="{% url 'organizer_dashboard' %}">Organizer Dashboard</a>
+                  <a
+                    class="dropdown-item"
+                    href="{% url 'organizer_dashboard' %}"
+                    >Organizer Dashboard</a
+                  >
                 </li>
                 {% endif %}
                 <li>
@@ -146,13 +152,18 @@
             <div class="event-card h-100">
               {% if event.image %}
               <div class="event-detail-image-wrap mb-4">
-                <img src="{{ event.image.url }}" alt="{{ event.title }}" class="event-detail-image">
+                <img
+                  src="{{ event.image.url }}"
+                  alt="{{ event.title }}"
+                  class="event-detail-image"
+                />
               </div>
               {% endif %}
               <h1 class="section-title mb-2">{{ event.title }}</h1>
               {% if event.is_finished %}
               <p class="event-meta mb-2">
-                <i class="fa-solid fa-flag-checkered me-2"></i>This event has finished.
+                <i class="fa-solid fa-flag-checkered me-2"></i>This event has
+                finished.
               </p>
               {% endif %}
               {% if can_finish_event %}
@@ -160,7 +171,11 @@
                 method="post"
                 action="{% url 'admin_event_finish_action' event.id %}"
                 class="mb-3"
-                onsubmit="return confirm('Mark this event as finished? It will be hidden from public event listings.');"
+                onsubmit="
+                  return confirm(
+                    'Mark this event as finished? It will be hidden from public event listings.',
+                  );
+                "
               >
                 {% csrf_token %}
                 <button type="submit" class="btn btn-outline-brand btn-sm">
@@ -179,24 +194,45 @@
               </p>
               {% endif %}
               {% endif %}
+              <p class="event-meta mb-3">
+                <i class="fa-solid fa-chart-line me-2"></i>Popularity: {{ predicted_popularity_percent }}%
+              </p>
               <p class="section-subtitle mb-3">{{ event.description }}</p>
               <div class="row g-3">
                 <div class="col-sm-6">
-                  <p class="event-meta mb-2"><i class="fa-regular fa-calendar me-2"></i>Starts: {{ event.start_date|date:"M d, Y h:i A" }}</p>
-                  <p class="event-meta mb-2"><i class="fa-regular fa-clock me-2"></i>Ends: {{ event.end_date|date:"M d, Y h:i A" }}</p>
-                  <p class="event-meta mb-2"><i class="fa-solid fa-layer-group me-2"></i>{{ event.category.name|default:"General" }}</p>
+                  <p class="event-meta mb-2">
+                    <i class="fa-regular fa-calendar me-2"></i>Starts: {{ event.start_date|date:"M d, Y h:i A" }}
+                  </p>
+                  <p class="event-meta mb-2">
+                    <i class="fa-regular fa-clock me-2"></i>Ends: {{ event.end_date|date:"M d, Y h:i A" }}
+                  </p>
+                  <p class="event-meta mb-2">
+                    <i class="fa-solid fa-layer-group me-2"></i>{{ event.category.name|default:"General" }}
+                  </p>
                 </div>
                 <div class="col-sm-6">
-                  <p class="event-meta mb-2"><i class="fa-solid fa-location-dot me-2"></i>{{ event.venue.city }} - {{ event.venue.name }}</p>
-                  <p class="event-meta mb-2"><i class="fa-solid fa-map-location-dot me-2"></i>{{ event.venue.address }}</p>
-                  <p class="event-meta mb-2"><i class="fa-solid fa-users me-2"></i>Capacity: {{ event.venue.capacity }}</p>
+                  <p class="event-meta mb-2">
+                    <i class="fa-solid fa-location-dot me-2"></i>{{ event.venue.city }} - {{ event.venue.name }}
+                  </p>
+                  <p class="event-meta mb-2">
+                    <i class="fa-solid fa-map-location-dot me-2"></i>{{ event.venue.address }}
+                  </p>
+                  <p class="event-meta mb-2">
+                    <i class="fa-solid fa-users me-2"></i>Capacity: {{ event.venue.capacity }}
+                  </p>
                 </div>
               </div>
               {% if event.is_finished and can_view_event_performance %}
               <div class="ticket-panel mt-4">
                 <h5 class="mb-2">Event Performance</h5>
-                <p class="event-meta mb-2"><i class="fa-solid fa-ticket me-2"></i>Tickets Sold: {{ event_tickets_sold }}</p>
-                <p class="event-meta mb-0"><i class="fa-solid fa-sack-dollar me-2"></i>Total Revenue: NPR {{ event_revenue }}</p>
+                <p class="event-meta mb-2">
+                  <i class="fa-solid fa-ticket me-2"></i>Tickets Sold: {{
+                  event_tickets_sold }}
+                </p>
+                <p class="event-meta mb-0">
+                  <i class="fa-solid fa-sack-dollar me-2"></i>Total Revenue: NPR
+                  {{ event_revenue }}
+                </p>
               </div>
               {% endif %}
             </div>
@@ -268,10 +304,12 @@
                 </button>
               </form>
               {% elif user.is_authenticated %}
-              <p class="section-subtitle mb-3">
-                {{ booking_block_message }}
-              </p>
-              <button type="button" class="btn btn-outline-secondary w-100" disabled>
+              <p class="section-subtitle mb-3">{{ booking_block_message }}</p>
+              <button
+                type="button"
+                class="btn btn-outline-secondary w-100"
+                disabled
+              >
                 Booking Unavailable
               </button>
               {% else %}
@@ -291,7 +329,9 @@
           <div class="d-flex justify-content-between align-items-end mb-3">
             <div>
               <h2 class="section-title mb-1">Similar Events</h2>
-              <p class="section-subtitle mb-0">More events you might want to explore.</p>
+              <p class="section-subtitle mb-0">
+                More events you might want to explore.
+              </p>
             </div>
           </div>
           <div class="row event-grid">
@@ -300,16 +340,35 @@
               <article class="event-card similar-event-card">
                 {% if similar_event.image %}
                 <div class="similar-event-image-wrap mb-3">
-                  <img src="{{ similar_event.image.url }}" alt="{{ similar_event.title }}" class="similar-event-image">
+                  <img
+                    src="{{ similar_event.image.url }}"
+                    alt="{{ similar_event.title }}"
+                    class="similar-event-image"
+                  />
                 </div>
                 {% endif %}
                 <h5 class="mb-2">{{ similar_event.title }}</h5>
-                <p class="event-meta mb-2"><i class="fa-regular fa-calendar me-2"></i>{{ similar_event.start_date|date:"M d, Y h:i A" }}</p>
-                <p class="event-meta mb-2"><i class="fa-solid fa-location-dot me-2"></i>{{ similar_event.venue.city }} - {{ similar_event.venue.name }}</p>
-                <p class="event-meta mb-2"><i class="fa-solid fa-layer-group me-2"></i>{{ similar_event.category.name|default:"General" }}</p>
+                <p class="event-meta mb-2">
+                  <i class="fa-regular fa-calendar me-2"></i>{{
+                  similar_event.start_date|date:"M d, Y h:i A" }}
+                </p>
+                <p class="event-meta mb-2">
+                  <i class="fa-solid fa-location-dot me-2"></i>{{
+                  similar_event.venue.city }} - {{ similar_event.venue.name }}
+                </p>
+                <p class="event-meta mb-2">
+                  <i class="fa-solid fa-layer-group me-2"></i>{{
+                  similar_event.category.name|default:"General" }}
+                </p>
                 <p class="event-price mb-2">NPR {{ similar_event.price }}</p>
-                <p class="section-subtitle mb-3">{{ similar_event.description|truncatechars:100 }}</p>
-                <a href="{% url 'event_detail' similar_event.id %}" class="btn btn-outline-brand btn-sm">View Details</a>
+                <p class="section-subtitle mb-3">
+                  {{ similar_event.description|truncatechars:100 }}
+                </p>
+                <a
+                  href="{% url 'event_detail' similar_event.id %}"
+                  class="btn btn-outline-brand btn-sm"
+                  >View Details</a
+                >
               </article>
             </div>
             {% endfor %}

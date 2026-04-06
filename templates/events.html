@@ -104,9 +104,21 @@
             <label class="filter-label" for="max_price">Max Price (NPR)</label>
             <input type="number" min="0" step="0.01" id="max_price" name="max_price" class="form-control" value="{{ selected_max_price }}" placeholder="Any">
           </div>
-          <div class="col-lg-2 col-md-6 d-flex gap-2">
-            <button type="submit" class="btn btn-primary-brand w-100">Apply</button>
-            <a href="{% url 'events' %}" class="btn btn-outline-brand w-100">Clear</a>
+          <div class="col-lg-2 col-md-6">
+            <label class="filter-label" for="sort">Sort By</label>
+            <select class="form-select" id="sort" name="sort">
+              <option value="date" {% if selected_sort == "date" %}selected{% endif %}>Date</option>
+              <option value="price_asc" {% if selected_sort == "price_asc" %}selected{% endif %}>Price: Low to High</option>
+              <option value="price_desc" {% if selected_sort == "price_desc" %}selected{% endif %}>Price: High to Low</option>
+              <option value="popularity" {% if selected_sort == "popularity" %}selected{% endif %}>Popularity</option>
+              {% if show_recommendations %}
+              <option value="recommendation" {% if selected_sort == "recommendation" %}selected{% endif %}>Recommendation Score</option>
+              {% endif %}
+            </select>
+          </div>
+          <div class="col-12 d-flex gap-2 justify-content-end">
+            <button type="submit" class="btn btn-primary-brand">Apply</button>
+            <a href="{% url 'events' %}" class="btn btn-outline-brand">Clear</a>
           </div>
         </div>
       </form>
@@ -127,6 +139,7 @@
             <h5 class="mb-2">{{ event.title }}</h5>
             <p class="event-meta mb-2"><i class="fa-solid fa-location-dot me-2"></i>{{ event.venue.city }}</p>
             <p class="event-meta mb-2"><i class="fa-regular fa-clock me-2"></i>{{ event.end_date|date:"M d, Y h:i A" }}</p>
+            <p class="event-meta mb-2"><i class="fa-solid fa-chart-line me-2"></i>Popularity: {{ event.predicted_popularity_percent }}%</p>
             <p class="event-price mb-2">NPR {{ event.price }}</p>
             <p class="section-subtitle mb-2">{{ event.description|truncatechars:90 }}</p>
             <a href="{% url 'event_detail' event.id %}" class="btn btn-outline-brand btn-sm">View Details</a>
@@ -151,6 +164,7 @@
             <p class="event-meta mb-2"><i class="fa-regular fa-calendar me-2"></i>{{ event.end_date|date:"M d, Y h:i A" }}</p>
             <p class="event-meta mb-2"><i class="fa-solid fa-location-dot me-2"></i>{{ event.venue.city }} - {{ event.venue.name }}</p>
             <p class="event-meta mb-2"><i class="fa-solid fa-layer-group me-2"></i>{{ event.category.name|default:"General" }}</p>
+            <p class="event-meta mb-2"><i class="fa-solid fa-chart-line me-2"></i>Predicted Popularity: {{ event.predicted_popularity_percent }}%</p>
             <p class="event-price mb-2">NPR {{ event.price }}</p>
             <p class="section-subtitle mb-2">{{ event.description|truncatechars:120 }}</p>
             <a href="{% url 'event_detail' event.id %}" class="btn btn-primary-brand btn-sm">View Details</a>
@@ -165,7 +179,7 @@
         <ul class="pagination pagination-sm mb-0">
           {% if events.has_previous %}
           <li class="page-item">
-            <a class="page-link" href="?q={{ selected_q|urlencode }}&category={{ selected_category|urlencode }}&city={{ selected_city|urlencode }}&max_price={{ selected_max_price|urlencode }}&page={{ events.previous_page_number }}">Previous</a>
+            <a class="page-link" href="?q={{ selected_q|urlencode }}&category={{ selected_category|urlencode }}&city={{ selected_city|urlencode }}&max_price={{ selected_max_price|urlencode }}&sort={{ selected_sort|urlencode }}&page={{ events.previous_page_number }}">Previous</a>
           </li>
           {% else %}
           <li class="page-item disabled"><span class="page-link">Previous</span></li>
@@ -173,7 +187,7 @@
           <li class="page-item disabled"><span class="page-link">Page {{ events.number }} / {{ events.paginator.num_pages }}</span></li>
           {% if events.has_next %}
           <li class="page-item">
-            <a class="page-link" href="?q={{ selected_q|urlencode }}&category={{ selected_category|urlencode }}&city={{ selected_city|urlencode }}&max_price={{ selected_max_price|urlencode }}&page={{ events.next_page_number }}">Next</a>
+            <a class="page-link" href="?q={{ selected_q|urlencode }}&category={{ selected_category|urlencode }}&city={{ selected_city|urlencode }}&max_price={{ selected_max_price|urlencode }}&sort={{ selected_sort|urlencode }}&page={{ events.next_page_number }}">Next</a>
           </li>
           {% else %}
           <li class="page-item disabled"><span class="page-link">Next</span></li>

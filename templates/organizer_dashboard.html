@@ -223,7 +223,8 @@
                         </button>
                       </form>
                       {% endif %}
-                      {% if user_role == "admin" and not event.is_finished and event.approval_status == "approved" %}
+                      {% if not event.is_finished and event.approval_status == "approved" %}
+                      {% if user_role == "admin" or event.organizer_id == user.id %}
                       <form
                         method="post"
                         action="{% url 'admin_event_finish_action' event.id %}"
@@ -232,18 +233,19 @@
                         {% csrf_token %}
                         <button
                           type="submit"
-                          class="btn btn-outline-dark btn-sm rounded-pill dashboard-action-btn"
+                          class="btn btn-outline-brand btn-sm rounded-pill dashboard-action-btn dashboard-manage-btn"
                         >
                           Finish
                         </button>
                       </form>
+                      {% endif %}
                       {% endif %}
                     </div>
                   </td>
                   <td>
                     <a
                       href="{% url 'organizer_event_attendees_csv' event.id %}"
-                      class="btn btn-accent-brand btn-sm"
+                      class="btn btn-accent-brand btn-sm dashboard-action-btn dashboard-manage-btn"
                       >Download CSV</a
                     >
                   </td>

@@ -24,7 +24,6 @@ class OrganizerEventForm(forms.ModelForm):
             "start_date",
             "end_date",
             "price",
-            "popularity",
             "is_active",
         ]
         widgets = {"description": forms.Textarea(attrs={"rows": 4})}

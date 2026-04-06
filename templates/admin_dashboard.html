@@ -128,7 +128,14 @@
     </section>
 
     <section class="event-card mb-4">
-      <h5 class="mb-3">Approved Live Events</h5>
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0">Approved Live Events</h5>
+        {% if approved_live_events|length > 4 %}
+        <button type="button" class="btn btn-outline-brand btn-sm dashboard-action-btn table-toggle-btn" data-target="approved-live-events-table">
+          View More
+        </button>
+        {% endif %}
+      </div>
       <div class="table-responsive">
         <table class="table mb-0">
           <thead>
@@ -136,7 +143,7 @@
           </thead>
           <tbody>
             {% for event in approved_live_events %}
-            <tr>
+            <tr class="{% if forloop.counter > 4 %}d-none extra-row approved-live-events-table{% endif %}">
               <td>{{ event.title }}</td>
               <td>{{ event.organizer.username|default:"N/A" }}</td>
               <td>{{ event.venue.city }} - {{ event.venue.name }}</td>
@@ -160,7 +167,14 @@
     </section>
 
     <section class="event-card mb-4">
-      <h5 class="mb-3">Finished Events</h5>
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0">Finished Events</h5>
+        {% if finished_events|length > 4 %}
+        <button type="button" class="btn btn-outline-brand btn-sm dashboard-action-btn table-toggle-btn" data-target="finished-events-table">
+          View More
+        </button>
+        {% endif %}
+      </div>
       <div class="table-responsive">
         <table class="table mb-0">
           <thead>
@@ -168,7 +182,7 @@
           </thead>
           <tbody>
             {% for event in finished_events %}
-            <tr>
+            <tr class="{% if forloop.counter > 4 %}d-none extra-row finished-events-table{% endif %}">
               <td>{{ event.title }}</td>
               <td>{{ event.organizer.username|default:"N/A" }}</td>
               <td>{{ event.finished_at|date:"M d, Y h:i A"|default:"-" }}</td>
@@ -185,7 +199,14 @@
     </section>
 
     <section class="event-card mb-4">
-      <h5 class="mb-3">User Management & Role Assignment</h5>
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0">User Management & Role Assignment</h5>
+        {% if user_rows|length > 4 %}
+        <button type="button" class="btn btn-outline-brand btn-sm dashboard-action-btn table-toggle-btn" data-target="user-management-table">
+          View More
+        </button>
+        {% endif %}
+      </div>
       <div class="table-responsive">
         <table class="table mb-0">
           <thead>
@@ -193,7 +214,7 @@
           </thead>
           <tbody>
             {% for row in user_rows %}
-            <tr>
+            <tr class="{% if forloop.counter > 4 %}d-none extra-row user-management-table{% endif %}">
               <td>{{ row.account.username }}<br><small class="text-muted">{{ row.account.email }}</small></td>
               <td>{% if row.account.is_active %}<span class="badge text-bg-success">Active</span>{% else %}<span class="badge text-bg-secondary">Inactive</span>{% endif %}</td>
               <td>
@@ -233,7 +254,14 @@
     </section>
 
     <section class="event-card mb-4">
-      <h5 class="mb-3">Payment Monitoring</h5>
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0">Payment Monitoring</h5>
+        {% if payment_rows|length > 4 %}
+        <button type="button" class="btn btn-outline-brand btn-sm dashboard-action-btn table-toggle-btn" data-target="payment-monitoring-table">
+          View More
+        </button>
+        {% endif %}
+      </div>
       <form method="get" class="row g-2 mb-3">
         <div class="col-md-2">
           <select name="payment_status" class="form-select form-select-sm">
@@ -277,7 +305,7 @@
           </thead>
           <tbody>
             {% for row in payment_rows %}
-            <tr>
+            <tr class="{% if forloop.counter > 4 %}d-none extra-row payment-monitoring-table{% endif %}">
               <td>{{ row.purchase_order_id }}</td>
               <td>{{ row.user.username }}</td>
               <td>{{ row.event.title }}</td>
@@ -295,7 +323,14 @@
     </section>
 
     <section class="event-card mb-4">
-      <h5 class="mb-3">Audit Log</h5>
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0">Audit Log</h5>
+        {% if audit_logs|length > 4 %}
+        <button type="button" class="btn btn-outline-brand btn-sm dashboard-action-btn table-toggle-btn" data-target="audit-log-table">
+          View More
+        </button>
+        {% endif %}
+      </div>
       <div class="table-responsive">
         <table class="table mb-0">
           <thead>
@@ -303,7 +338,7 @@
           </thead>
           <tbody>
             {% for log in audit_logs %}
-            <tr>
+            <tr class="{% if forloop.counter > 4 %}d-none extra-row audit-log-table{% endif %}">
               <td>{{ log.created_at|date:"M d, Y h:i A" }}</td>
               <td>{{ log.actor.username }}</td>
               <td>{{ log.get_action_display }}</td>
@@ -346,6 +381,21 @@
         localStorage.setItem("eventmandu-theme", next);
       });
     }
+
+    document.querySelectorAll(".table-toggle-btn").forEach(function (button) {
+      button.addEventListener("click", function () {
+        const targetClass = button.dataset.target;
+        const hiddenRows = document.querySelectorAll("." + targetClass);
+        const isExpanded = button.dataset.expanded === "true";
+
+        hiddenRows.forEach(function (row) {
+          row.classList.toggle("d-none", isExpanded);
+        });
+
+        button.dataset.expanded = isExpanded ? "false" : "true";
+        button.textContent = isExpanded ? "View More" : "View Less";
+      });
+    });
   })();
 </script>
 </body>

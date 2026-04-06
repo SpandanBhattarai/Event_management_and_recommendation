@@ -1,6 +1,9 @@
 import logging
 import math
 from collections import Counter
+from datetime import timedelta
+from django.db.models import IntegerField, Q, Sum, Value
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from .models import Event, TicketPurchase, UserPreference
 
@@ -32,6 +35,10 @@ def normalize(value, max_value):
     if max_value == 0:
         return 0
     return value / max_value
+
+
+def clamp_score(value):
+    return max(0.0, min(1.0, value))
 
 
 def get_distance_score(distance_km, max_distance_km=50):
@@ -109,6 +116,76 @@ def calculate_final_score(category_score, budget_score, distance_score, populari
     )
 
 
+def _build_category_popularity_baselines():
+    finished_events = (
+        Event.objects.filter(
+            is_finished=True,
+            approval_status=Event.APPROVAL_APPROVED,
+            category__isnull=False,
+        )
+        .select_related("venue")
+        .annotate(
+            sold_tickets=Coalesce(
+                Sum(
+                    "ticket_purchases__quantity",
+                    filter=Q(ticket_purchases__status=TicketPurchase.STATUS_COMPLETED),
+                ),
+                Value(0, output_field=IntegerField()),
+            )
+        )
+    )
+
+    category_scores = {}
+    for event in finished_events:
+        capacity = max(getattr(event.venue, "capacity", 0) or 0, 1)
+        fill_ratio = clamp_score(event.sold_tickets / capacity)
+        category_scores.setdefault(event.category_id, []).append(fill_ratio)
+
+    return {
+        category_id: (sum(scores) / len(scores))
+        for category_id, scores in category_scores.items()
+        if scores
+    }
+
+
+def get_event_popularity_score(event, context=None, now=None):
+    now = now or timezone.now()
+    context = context or {}
+
+    capacity = max(getattr(event.venue, "capacity", 0) or 0, 1)
+    baseline_score = normalize(getattr(event, "popularity", 1) or 1, 5)
+    category_baseline = context.get("category_popularity_baselines", {}).get(event.category_id, baseline_score)
+
+    sold_tickets = (
+        TicketPurchase.objects.filter(
+            event=event,
+            status=TicketPurchase.STATUS_COMPLETED,
+        ).aggregate(total=Coalesce(Sum("quantity"), 0)).get("total")
+        or 0
+    )
+    recent_tickets = (
+        TicketPurchase.objects.filter(
+            event=event,
+            status=TicketPurchase.STATUS_COMPLETED,
+            created_at__gte=now - timedelta(days=7),
+        ).aggregate(total=Coalesce(Sum("quantity"), 0)).get("total")
+        or 0
+    )
+
+    sold_ratio = clamp_score(sold_tickets / capacity)
+    recent_demand_score = clamp_score(recent_tickets / max(capacity * 0.25, 1))
+
+    if sold_tickets or recent_tickets:
+        return clamp_score(
+            (sold_ratio * 0.50)
+            + (recent_demand_score * 0.25)
+            + (category_baseline * 0.15)
+            + (baseline_score * 0.10)
+        )
+
+    return clamp_score((category_baseline * 0.70) + (baseline_score * 0.30))
+
+
 def _build_recommendation_context(request):
     user_lat = request.session.get("user_lat")
     user_lng = request.session.get("user_lng")
@@ -169,6 +246,7 @@ def _build_recommendation_context(request):
         "has_explicit_category_preference": bool(user_category_id or user_category_name),
         "category_counts": category_counts,
         "max_category_count": max_category_count,
+        "category_popularity_baselines": _build_category_popularity_baselines(),
     }
 
 
@@ -194,7 +272,7 @@ def _get_recommendation_data_for_event(event, context):
         )
         distance_score = get_distance_score(distance)
 
-    popularity_score = normalize(event.popularity, 5)
+    popularity_score = get_event_popularity_score(event, context=context)
     recency_score = get_recency_score(event)
     final_score = calculate_final_score(
         category_score,
