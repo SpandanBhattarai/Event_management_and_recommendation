@@ -36,6 +36,7 @@ urlpatterns = [
      path('buy-ticket/<int:event_id>/', views.buy_ticket, name='buy_ticket'),
      path('khalti/return/', views.khalti_return, name='khalti_return'),
      path('tickets/', views.tickets_view, name='tickets'),
+     path('tickets/<int:ticket_id>/download/', views.ticket_pdf_download, name='ticket_pdf_download'),
      path('profile/preferences/', views.profile_preferences_view, name='profile_preferences'),
      path('dashboard/admin/', views.admin_dashboard, name='admin_dashboard'),
      path('dashboard/admin/events/<int:event_id>/approval/', views.admin_event_approval_action, name='admin_event_approval_action'),

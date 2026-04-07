@@ -70,10 +70,10 @@ class TicketEmailTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
 
         email = mail.outbox[0]
-        self.assertEqual(email.subject, "event tickets from eventmandu")
+        self.assertEqual(email.subject, "Event tickets from EventMandu")
         self.assertIn("Good morning!", email.body)
-        self.assertIn("hello sabin, please find your ticket details below:", email.body)
-        self.assertIn("thank you,\neventmandu team", email.body)
+        self.assertIn("Hello Spandan, please find your ticket details below:", email.body)
+        self.assertIn("Thank you,\nEventMandu team", email.body)
         self.assertEqual(len(email.attachments), 1)
 
         attachment = email.attachments[0]
@@ -104,3 +104,84 @@ class TicketEmailTests(TestCase):
         self.assertIn("Payment Summary", html)
         self.assertIn("Standard Entry", html)
         self.assertIn("This is a digitally generated ticket.", html)
+
+    def test_email_uses_current_transaction_snapshot_when_purchase_is_merged(self):
+        older_purchase = TicketPurchase.objects.create(
+            user=self.user,
+            event=self.event,
+            quantity=5,
+            total_amount="7500.00",
+            status=TicketPurchase.STATUS_COMPLETED,
+            khalti_txn_id="txn-old",
+            purchase_order_id="order-old",
+        )
+        new_purchase = TicketPurchase.objects.create(
+            user=self.user,
+            event=self.event,
+            quantity=2,
+            total_amount="3000.00",
+            status=TicketPurchase.STATUS_INITIATED,
+            khalti_pidx="pidx-merge",
+            purchase_order_id="order-new",
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse("khalti_return"),
+            {"status": "Completed", "pidx": "pidx-merge", "transaction_id": "txn-new"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(TicketPurchase.objects.filter(id=new_purchase.id).exists())
+        older_purchase.refresh_from_db()
+        self.assertEqual(older_purchase.quantity, 7)
+        self.assertEqual(len(mail.outbox), 1)
+        email = mail.outbox[0]
+        self.assertIn("Quantity: 2", email.body)
+        self.assertIn("Total Paid: NPR 3000.00", email.body)
+        self.assertIn("Order ID: order-new", email.body)
+
+    def test_ticket_owner_can_download_pdf_from_tickets_page_route(self):
+        purchase = TicketPurchase.objects.create(
+            user=self.user,
+            event=self.event,
+            quantity=1,
+            total_amount="1500.00",
+            status=TicketPurchase.STATUS_COMPLETED,
+            khalti_txn_id="txn-download",
+            purchase_order_id="order-download",
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("ticket_pdf_download", args=[purchase.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn("eventmandu-ticket-order-download.pdf", response["Content-Disposition"])
+
+    def test_ticket_download_is_blocked_for_ended_events(self):
+        ended_event = Event.objects.create(
+            title="Past Show",
+            description="Past event",
+            venue=self.venue,
+            category=self.category,
+            start_date=timezone.now() - timedelta(days=3),
+            end_date=timezone.now() - timedelta(days=2),
+            price="1200.00",
+            approval_status=Event.APPROVAL_APPROVED,
+            is_finished=True,
+        )
+        purchase = TicketPurchase.objects.create(
+            user=self.user,
+            event=ended_event,
+            quantity=1,
+            total_amount="1200.00",
+            status=TicketPurchase.STATUS_COMPLETED,
+            khalti_txn_id="txn-ended",
+            purchase_order_id="order-ended",
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("ticket_pdf_download", args=[purchase.id]))
+
+        self.assertEqual(response.status_code, 403)

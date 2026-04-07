@@ -1,5 +1,6 @@
 from decimal import Decimal
 from io import BytesIO
+from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.core.mail import EmailMessage
@@ -12,15 +13,15 @@ from reportlab.pdfgen import canvas
 
 
 def _ticket_salutation(purchase_time):
-    local_time = timezone.localtime(purchase_time)
+    local_time = timezone.localtime(purchase_time, ZoneInfo(settings.TIME_ZONE))
     hour = local_time.hour
     if 5 <= hour < 12:
-        return "Good morning!"
+        return "Good morning! Greetings from EventMandu."
     if 12 <= hour < 17:
-        return "Good afternoon!"
+        return "Good afternoon! Greetings from EventMandu."
     if 17 <= hour < 21:
-        return "Good evening!"
-    return "Hello!"
+        return "Good evening! Greetings from EventMandu."
+    return "Greetings from EventMandu."
 
 
 def _ticket_details_lines(purchase):
@@ -58,20 +59,33 @@ def _ticket_status_meta(status):
     return mapping.get(status, ("Pending", "#f59e0b"))
 
 
-def build_ticket_context(purchase):
+def build_purchase_snapshot(purchase):
+    return {
+        "quantity": int(purchase.quantity),
+        "total_amount": Decimal(purchase.total_amount),
+        "purchase_order_id": purchase.purchase_order_id,
+        "transaction_id": purchase.khalti_txn_id or "Pending confirmation",
+        "created_at": purchase.created_at,
+        "status": purchase.status,
+    }
+
+
+def build_ticket_context(purchase, purchase_snapshot=None):
     event = purchase.event
     venue = event.venue
     user = purchase.user
-    local_purchase_time = timezone.localtime(purchase.created_at)
+    snapshot = purchase_snapshot or build_purchase_snapshot(purchase)
+    local_purchase_time = timezone.localtime(snapshot["created_at"])
     local_start = timezone.localtime(event.start_date)
     local_end = timezone.localtime(event.end_date)
-    status_label, status_color = _ticket_status_meta(purchase.status)
-    total_amount = Decimal(purchase.total_amount)
-    unit_price = total_amount / max(purchase.quantity, 1)
+    status_label, status_color = _ticket_status_meta(snapshot["status"])
+    total_amount = Decimal(snapshot["total_amount"])
+    quantity = int(snapshot["quantity"])
+    unit_price = total_amount / max(quantity, 1)
 
     return {
         "brand_name": "EventMandu",
-        "booking_id": purchase.purchase_order_id,
+        "booking_id": snapshot["purchase_order_id"],
         "booking_date": local_purchase_time,
         "status_label": status_label,
         "status_color": status_color,
@@ -88,34 +102,46 @@ def build_ticket_context(purchase):
         "ticket_rows": [
             {
                 "ticket_type": "Standard Entry",
-                "quantity": purchase.quantity,
+                "quantity": quantity,
                 "price": unit_price,
                 "total": total_amount,
             }
         ],
         "subtotal": total_amount,
         "total_amount": total_amount,
-        "transaction_id": purchase.khalti_txn_id or "Pending confirmation",
+        "transaction_id": snapshot["transaction_id"],
         "support_email": "support@eventmandu.com",
         "support_phone": "+977-9800000000",
-        "logo_text": "EM",
     }
 
 
-def render_ticket_pdf_html(purchase):
-    return render_to_string("pdf/event_ticket.html", build_ticket_context(purchase))
+def render_ticket_pdf_html(purchase, purchase_snapshot=None):
+    return render_to_string("pdf/event_ticket.html", build_ticket_context(purchase, purchase_snapshot=purchase_snapshot))
 
 
-def _build_ticket_email_body(purchase):
+def _build_ticket_email_body(purchase, purchase_snapshot=None):
+    snapshot = purchase_snapshot or build_purchase_snapshot(purchase)
+    local_purchase_time = timezone.localtime(snapshot["created_at"])
+    local_start = timezone.localtime(purchase.event.start_date)
+    local_end = timezone.localtime(purchase.event.end_date)
     lines = [
-        _ticket_salutation(purchase.created_at),
+        _ticket_salutation(snapshot["created_at"]),
         "",
-        f"hello {purchase.user.username}, please find your ticket details below:",
+        f"Hello {purchase.user.username}, please find your ticket details below:",
         "",
-        *_ticket_details_lines(purchase),
+        f"Event: {purchase.event.title}",
+        f"Venue: {purchase.event.venue.name}",
+        f"Location: {purchase.event.venue.city} - {purchase.event.venue.address}",
+        f"Starts: {local_start.strftime('%b %d, %Y %I:%M %p')}",
+        f"Ends: {local_end.strftime('%b %d, %Y %I:%M %p')}",
+        f"Quantity: {snapshot['quantity']}",
+        f"Total Paid: NPR {Decimal(snapshot['total_amount'])}",
+        f"Order ID: {snapshot['purchase_order_id']}",
+        f"Transaction ID: {snapshot['transaction_id']}",
+        f"Purchased At: {local_purchase_time.strftime('%b %d, %Y %I:%M %p')}",
         "",
-        "thank you,",
-        "eventmandu team",
+        "Thank you,",
+        "EventMandu team",
     ]
     return "\n".join(lines)
 
@@ -141,9 +167,9 @@ def _draw_label_value(pdf, label, value, x, y, width):
         y - 14,
         width,
         font_name="Helvetica-Bold",
-        font_size=12,
+        font_size=11,
         color=colors.HexColor("#183153"),
-        leading=15,
+        leading=13,
     )
 
 
@@ -151,8 +177,15 @@ def _format_money(amount):
     return f"NPR {Decimal(amount):,.2f}"
 
 
-def _build_reportlab_ticket_pdf(purchase):
-    context = build_ticket_context(purchase)
+def _draw_section_header(pdf, title, x, y, width):
+    pdf.setFillColor(colors.HexColor("#163258"))
+    pdf.setFont("Helvetica-Bold", 13)
+    pdf.drawString(x, y, title)
+    return y - 14
+
+
+def _build_reportlab_ticket_pdf(purchase, purchase_snapshot=None):
+    context = build_ticket_context(purchase, purchase_snapshot=purchase_snapshot)
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4, pageCompression=0)
     page_width, page_height = A4
@@ -173,40 +206,31 @@ def _build_reportlab_ticket_pdf(purchase):
     pdf.setStrokeColor(colors.HexColor("#d8e3f2"))
     pdf.roundRect(card_x, card_y, card_width, card_height, 18, stroke=1, fill=1)
 
-    header_height = 136
+    header_height = 118
     header_y = top_y - header_height
     pdf.setFillColor(colors.HexColor("#1f6bff"))
     pdf.roundRect(card_x, header_y, card_width, header_height, 18, stroke=0, fill=1)
     pdf.rect(card_x, header_y, card_width, header_height - 18, stroke=0, fill=1)
 
-    badge_size = 42
-    badge_x = card_x + 24
-    badge_y = top_y - 60
     pdf.setFillColor(colors.white)
-    pdf.roundRect(badge_x, badge_y, badge_size, badge_size, 12, stroke=0, fill=1)
-    pdf.setFillColor(colors.HexColor("#1f6bff"))
-    pdf.setFont("Helvetica-Bold", 18)
-    pdf.drawCentredString(badge_x + (badge_size / 2), badge_y + 14, context["logo_text"])
-
-    pdf.setFillColor(colors.white)
-    pdf.setFont("Helvetica-Bold", 22)
-    pdf.drawString(card_x + 24, top_y - 84, context["brand_name"])
-    pdf.setFont("Helvetica", 11)
+    pdf.setFont("Helvetica-Bold", 20)
+    pdf.drawString(card_x + 24, top_y - 46, context["brand_name"])
+    pdf.setFont("Helvetica", 10)
     pdf.setFillColor(colors.HexColor("#dce8ff"))
-    pdf.drawString(card_x + 24, top_y - 98, "Premium event ticket and booking invoice")
+    pdf.drawString(card_x + 24, top_y - 60, "Event ticket invoice")
 
     right_x = card_x + card_width - 220
     pdf.setFont("Helvetica-Bold", 9)
-    pdf.drawString(right_x, top_y - 42, "BOOKING ID")
+    pdf.drawString(right_x, top_y - 34, "BOOKING ID")
     pdf.setFillColor(colors.white)
-    pdf.setFont("Helvetica-Bold", 16)
-    pdf.drawRightString(card_x + card_width - 24, top_y - 58, context["booking_id"])
+    pdf.setFont("Helvetica-Bold", 15)
+    pdf.drawRightString(card_x + card_width - 24, top_y - 50, context["booking_id"])
 
     badge_w = 82
     badge_h = 24
     badge_right = card_x + card_width - 24
     badge_left = badge_right - badge_w
-    badge_y = top_y - 92
+    badge_y = top_y - 80
     pdf.setFillColor(colors.white)
     pdf.roundRect(badge_left, badge_y, badge_w, badge_h, 12, stroke=0, fill=1)
     pdf.setFillColor(colors.HexColor(context["status_color"]))
@@ -214,42 +238,34 @@ def _build_reportlab_ticket_pdf(purchase):
     pdf.drawCentredString(badge_left + (badge_w / 2), badge_y + 8, context["status_label"])
 
     pdf.setFillColor(colors.HexColor("#e7efff"))
-    pdf.setFont("Helvetica", 10)
-    pdf.drawRightString(card_x + card_width - 24, top_y - 108, f"Booked on {context['booking_date'].strftime('%b %d, %Y at %I:%M %p')}")
+    pdf.setFont("Helvetica", 9)
+    pdf.drawRightString(card_x + card_width - 24, top_y - 96, f"Booked on {context['booking_date'].strftime('%b %d, %Y at %I:%M %p')}")
 
     content_left = card_x + 24
     content_width = card_width - 48
-    footer_base_y = card_y + 22
-    footer_top_y = footer_base_y + 44
-    y = header_y - 20
+    footer_base_y = card_y + 20
+    y = header_y - 14
 
     pdf.setFillColor(colors.HexColor("#3275ff"))
-    pdf.setFont("Helvetica-Bold", 10)
+    pdf.setFont("Helvetica-Bold", 9)
     pdf.drawString(content_left, y, "YOUR EVENT PASS")
-    y -= 26
+    y -= 22
 
     pdf.setFillColor(colors.HexColor("#162d50"))
-    pdf.setFont("Helvetica-Bold", 23)
-    event_lines = simpleSplit(context["event_name"], "Helvetica-Bold", 23, content_width)
+    pdf.setFont("Helvetica-Bold", 20)
+    event_lines = simpleSplit(context["event_name"], "Helvetica-Bold", 20, content_width)
     for line in event_lines[:2]:
         pdf.drawString(content_left, y, line)
-        y -= 26
+        y -= 24
 
     pdf.setFillColor(colors.HexColor("#e9f1ff"))
     pdf.roundRect(content_left, y - 2, 86, 20, 10, stroke=0, fill=1)
     pdf.setFillColor(colors.HexColor("#205bd8"))
-    pdf.setFont("Helvetica-Bold", 10)
+    pdf.setFont("Helvetica-Bold", 9)
     pdf.drawString(content_left + 10, y + 5, context["event_type"])
-    y -= 24
-
-    pdf.setStrokeColor(colors.HexColor("#cfdbeb"))
-    pdf.line(content_left, y, card_x + card_width - 24, y)
     y -= 18
 
-    pdf.setFillColor(colors.HexColor("#163258"))
-    pdf.setFont("Helvetica-Bold", 14)
-    pdf.drawString(content_left, y, "Event Details")
-    y -= 16
+    y = _draw_section_header(pdf, "Event Details", content_left, y, content_width)
 
     y = _draw_label_value(
         pdf,
@@ -258,43 +274,31 @@ def _build_reportlab_ticket_pdf(purchase):
         content_left,
         y,
         content_width,
-    ) - 8
+    ) - 10
     y = _draw_label_value(
         pdf,
-        "Starts",
-        context["event_start"].strftime("%b %d, %Y at %I:%M %p"),
-        content_left,
-        y,
-        content_width,
-    ) - 8
-    y = _draw_label_value(
-        pdf,
-        "Ends",
-        context["event_end"].strftime("%b %d, %Y at %I:%M %p"),
+        "Date",
+        context["event_end"].strftime("%b %d, %Y"),
         content_left,
         y,
         content_width,
     ) - 8
 
-    pdf.line(content_left, y, card_x + card_width - 24, y)
-    y -= 18
+    pdf.setStrokeColor(colors.HexColor("#cfdbeb"))
+    pdf.line(content_left, y, content_left + content_width, y)
+    y -= 20
 
-    pdf.setFillColor(colors.HexColor("#163258"))
-    pdf.setFont("Helvetica-Bold", 14)
-    pdf.drawString(content_left, y, "User Details")
-    y -= 16
+    y = _draw_section_header(pdf, "User Details", content_left, y, content_width)
 
-    y = _draw_label_value(pdf, "Name", context["attendee_name"], content_left, y, content_width) - 8
-    y = _draw_label_value(pdf, "Phone Number", context["attendee_phone"], content_left, y, content_width) - 8
+    y = _draw_label_value(pdf, "Name", context["attendee_name"], content_left, y, content_width) - 10
+    y = _draw_label_value(pdf, "Phone Number", context["attendee_phone"], content_left, y, content_width) - 10
     y = _draw_label_value(pdf, "Email", context["attendee_email"], content_left, y, content_width) - 8
 
-    pdf.line(content_left, y, card_x + card_width - 24, y)
-    y -= 18
+    pdf.setStrokeColor(colors.HexColor("#cfdbeb"))
+    pdf.line(content_left, y, content_left + content_width, y)
+    y -= 20
 
-    pdf.setFillColor(colors.HexColor("#163258"))
-    pdf.setFont("Helvetica-Bold", 14)
-    pdf.drawString(content_left, y, "Ticket Details")
-    y -= 16
+    y = _draw_section_header(pdf, "Ticket Details", content_left, y, content_width)
 
     table_x = content_left
     table_width = content_width
@@ -311,7 +315,7 @@ def _build_reportlab_ticket_pdf(purchase):
         pdf.drawString(cursor_x, y - 10, header)
         cursor_x += width
 
-    y -= 30
+    y -= 28
     row = context["ticket_rows"][0]
     values = [
         row["ticket_type"],
@@ -328,81 +332,94 @@ def _build_reportlab_ticket_pdf(purchase):
         else:
             pdf.drawString(cursor_x, y - 2, value)
         cursor_x += width
-    y -= 18
-
-    if y < footer_top_y + 86:
-        y = footer_top_y + 86
-
+    y -= 12
+    pdf.setStrokeColor(colors.HexColor("#cfdbeb"))
     pdf.line(content_left, y, card_x + card_width - 24, y)
-    y -= 18
+
+    panel_y = y - 26
+    panel_width = card_width - 48
+    heading_bar_height = 20
+    panel_content_height = 64
+    heading_bar_y = panel_y
+    pdf.setFillColor(colors.HexColor("#edf4ff"))
+    pdf.roundRect(content_left, heading_bar_y, panel_width, heading_bar_height, 10, stroke=0, fill=1)
+
+    panel_top = heading_bar_y + 5
+    right_value_x = card_x + card_width - 38
 
     pdf.setFillColor(colors.HexColor("#163258"))
-    pdf.setFont("Helvetica-Bold", 14)
-    pdf.drawString(content_left, y, "Payment Summary")
+    pdf.setFont("Helvetica-Bold", 13)
+    pdf.drawString(content_left + 14, panel_top, "Payment Summary")
 
-    right_value_x = card_x + card_width - 24
-    y -= 16
+    first_row_y = heading_bar_y - 18
     pdf.setFont("Helvetica-Bold", 9)
     pdf.setFillColor(colors.HexColor("#7186a0"))
-    pdf.drawString(content_left, y, "SUBTOTAL")
+    pdf.drawString(content_left + 14, first_row_y, "SUBTOTAL")
     pdf.setFont("Helvetica-Bold", 12)
     pdf.setFillColor(colors.HexColor("#183153"))
-    pdf.drawRightString(right_value_x, y, _format_money(context["subtotal"]))
+    pdf.drawRightString(right_value_x, first_row_y, _format_money(context["subtotal"]))
 
-    y -= 20
+    second_row_y = first_row_y - 18
     pdf.setFont("Helvetica-Bold", 9)
     pdf.setFillColor(colors.HexColor("#7186a0"))
-    pdf.drawString(content_left, y, "TOTAL AMOUNT")
-    pdf.setFont("Helvetica-Bold", 18)
+    pdf.drawString(content_left + 14, second_row_y, "TOTAL AMOUNT")
+    pdf.setFont("Helvetica-Bold", 16)
     pdf.setFillColor(colors.HexColor("#1657df"))
-    pdf.drawRightString(right_value_x, y, _format_money(context["total_amount"]))
+    pdf.drawRightString(right_value_x, second_row_y, _format_money(context["total_amount"]))
 
-    y -= 18
+    third_row_y = second_row_y - 18
     pdf.setFont("Helvetica-Bold", 9)
     pdf.setFillColor(colors.HexColor("#7186a0"))
-    pdf.drawString(content_left, y, "STATUS")
+    pdf.drawString(content_left + 14, third_row_y, "STATUS")
     pdf.setFont("Helvetica-Bold", 11)
     pdf.setFillColor(colors.HexColor(context["status_color"]))
-    pdf.drawString(content_left + 58, y, context["status_label"])
+    pdf.drawString(content_left + 60, third_row_y, context["status_label"])
     pdf.setFillColor(colors.HexColor("#7186a0"))
     pdf.setFont("Helvetica-Bold", 9)
-    pdf.drawString(content_left + 150, y, "TXN ID")
+    pdf.drawString(content_left + 160, third_row_y, "TXN ID")
     pdf.setFont("Helvetica", 10)
     pdf.setFillColor(colors.HexColor("#183153"))
-    pdf.drawString(content_left + 190, y, str(context["transaction_id"]))
+    txn_text = str(context["transaction_id"])
+    txn_lines = simpleSplit(txn_text, "Helvetica", 10, right_value_x - (content_left + 200))
+    if txn_lines:
+        pdf.drawString(content_left + 200, third_row_y, txn_lines[0])
 
     pdf.setStrokeColor(colors.HexColor("#dce6f3"))
-    pdf.line(content_left, footer_top_y, card_x + card_width - 24, footer_top_y)
+    footer_line_y = panel_y - panel_content_height - 10
+    min_footer_line_y = footer_base_y + 34
+    if footer_line_y < min_footer_line_y:
+        footer_line_y = min_footer_line_y
+    pdf.line(content_left, footer_line_y, card_x + card_width - 24, footer_line_y)
     pdf.setFont("Helvetica-Bold", 10)
     pdf.setFillColor(colors.HexColor("#5f738f"))
-    pdf.drawString(content_left, footer_base_y + 24, "This is a digitally generated ticket.")
+    pdf.drawString(content_left, footer_line_y - 18, "This is a digitally generated ticket.")
     pdf.setFont("Helvetica", 9)
-    pdf.drawString(content_left, footer_base_y + 12, f"Support: {context['support_email']} | {context['support_phone']}")
-    pdf.drawString(content_left, footer_base_y, "Terms: non-refundable. Please show this ticket or QR at entry if requested by the organizer.")
+    pdf.drawString(content_left, footer_line_y - 30, f"Support: {context['support_email']} | {context['support_phone']}")
+    pdf.drawString(content_left, footer_line_y - 42, "Terms: non-refundable. Please show this ticket or QR at entry if requested by the organizer.")
 
     pdf.showPage()
     pdf.save()
     return buffer.getvalue()
 
 
-def build_ticket_pdf(purchase):
-    return _build_reportlab_ticket_pdf(purchase)
+def build_ticket_pdf(purchase, purchase_snapshot=None):
+    return _build_reportlab_ticket_pdf(purchase, purchase_snapshot=purchase_snapshot)
 
 
-def send_ticket_email(purchase):
+def send_ticket_email(purchase, purchase_snapshot=None):
     recipient = purchase.user.email
     if not recipient:
         return False
 
     email = EmailMessage(
         subject="event tickets from eventmandu",
-        body=_build_ticket_email_body(purchase),
+        body=_build_ticket_email_body(purchase, purchase_snapshot=purchase_snapshot),
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[recipient],
     )
     email.attach(
         f"eventmandu-ticket-{purchase.purchase_order_id}.pdf",
-        build_ticket_pdf(purchase),
+        build_ticket_pdf(purchase, purchase_snapshot=purchase_snapshot),
         "application/pdf",
     )
     email.send(fail_silently=False)

@@ -164,7 +164,7 @@
             <p class="event-meta mb-2"><i class="fa-regular fa-calendar me-2"></i>{{ event.end_date|date:"M d, Y h:i A" }}</p>
             <p class="event-meta mb-2"><i class="fa-solid fa-location-dot me-2"></i>{{ event.venue.city }} - {{ event.venue.name }}</p>
             <p class="event-meta mb-2"><i class="fa-solid fa-layer-group me-2"></i>{{ event.category.name|default:"General" }}</p>
-            <p class="event-meta mb-2"><i class="fa-solid fa-chart-line me-2"></i>Predicted Popularity: {{ event.predicted_popularity_percent }}%</p>
+            <p class="event-meta mb-2"><i class="fa-solid fa-chart-line me-2"></i>Popularity: {{ event.predicted_popularity_percent }}%</p>
             <p class="event-price mb-2">NPR {{ event.price }}</p>
             <p class="section-subtitle mb-2">{{ event.description|truncatechars:120 }}</p>
             <a href="{% url 'event_detail' event.id %}" class="btn btn-primary-brand btn-sm">View Details</a>

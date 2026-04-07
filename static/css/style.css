@@ -412,6 +412,19 @@ main.pt-4 {
   padding: 1.35rem;
 }
 
+.ticket-download-muted {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
 .form-control,
 .form-select {
   border-radius: 12px;

@@ -349,16 +349,13 @@
                 {% endif %}
                 <h5 class="mb-2">{{ similar_event.title }}</h5>
                 <p class="event-meta mb-2">
-                  <i class="fa-regular fa-calendar me-2"></i>{{
-                  similar_event.start_date|date:"M d, Y h:i A" }}
+                  <i class="fa-regular fa-calendar me-2"></i>{{ similar_event.start_date|date:"M d, Y h:i A" }}
                 </p>
                 <p class="event-meta mb-2">
-                  <i class="fa-solid fa-location-dot me-2"></i>{{
-                  similar_event.venue.city }} - {{ similar_event.venue.name }}
+                  <i class="fa-solid fa-location-dot me-2"></i>{{ similar_event.venue.city }} - {{ similar_event.venue.name }}
                 </p>
                 <p class="event-meta mb-2">
-                  <i class="fa-solid fa-layer-group me-2"></i>{{
-                  similar_event.category.name|default:"General" }}
+                  <i class="fa-solid fa-layer-group me-2"></i>{{ similar_event.category.name|default:"General" }}
                 </p>
                 <p class="event-price mb-2">NPR {{ similar_event.price }}</p>
                 <p class="section-subtitle mb-3">

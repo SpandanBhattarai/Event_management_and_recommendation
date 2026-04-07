@@ -12,7 +12,7 @@ from urllib import error as urllib_error
 from urllib import request as urllib_request
 
 from django.conf import settings
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, render, redirect
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout
@@ -26,7 +26,7 @@ from .models import AuditLog, Category, Event, TicketPurchase, UserPreference, U
 from .recommendation import get_event_popularity_score, get_event_recommendation_data, get_recommended_events
 from .roles import get_user_role, role_required
 from .forms import OrganizerEventForm
-from .email_utils import send_ticket_email
+from .email_utils import build_ticket_pdf, send_ticket_email
 
 RESERVATION_HOLD_MINUTES = 15
 logger = logging.getLogger(__name__)
@@ -767,12 +767,21 @@ def khalti_return(request):
 
     if status == "Completed":
         if ticket:
+            ticket_email_snapshot = None
             with transaction.atomic():
                 ticket = TicketPurchase.objects.select_for_update().get(id=ticket.id)
                 ticket.status = TicketPurchase.STATUS_COMPLETED
                 ticket.khalti_txn_id = txn_id or ticket.khalti_txn_id
                 ticket.reservation_expires_at = None
                 ticket.save(update_fields=["status", "khalti_txn_id", "reservation_expires_at"])
+                ticket_email_snapshot = {
+                    "quantity": int(ticket.quantity),
+                    "total_amount": Decimal(ticket.total_amount),
+                    "purchase_order_id": ticket.purchase_order_id,
+                    "transaction_id": ticket.khalti_txn_id or "Pending confirmation",
+                    "created_at": ticket.created_at,
+                    "status": ticket.status,
+                }
 
                 merged_target = (
                     TicketPurchase.objects.select_for_update()
@@ -794,7 +803,7 @@ def khalti_return(request):
                     ticket.delete()
                     ticket = merged_target
             try:
-                if not send_ticket_email(ticket):
+                if not send_ticket_email(ticket, purchase_snapshot=ticket_email_snapshot):
                     messages.warning(
                         request,
                         "Payment completed, but no email was sent because your account has no email address.",
@@ -828,12 +837,32 @@ def khalti_return(request):
 
 @login_required
 def tickets_view(request):
+    current_time = timezone.now()
     tickets = (
         TicketPurchase.objects.filter(user=request.user, status=TicketPurchase.STATUS_COMPLETED)
         .select_related("event", "event__venue")
         .order_by("-created_at")
     )
-    return render(request, "tickets.html", {"tickets": tickets})
+    return render(request, "tickets.html", {"tickets": tickets, "current_time": current_time})
+
+
+@login_required
+def ticket_pdf_download(request, ticket_id):
+    ticket = get_object_or_404(
+        TicketPurchase.objects.filter(
+            id=ticket_id,
+            user=request.user,
+            status=TicketPurchase.STATUS_COMPLETED,
+        ).select_related("event", "event__venue"),
+    )
+    if ticket.event.is_finished or ticket.event.end_date <= timezone.now():
+        return HttpResponseForbidden("Ticket download is unavailable because this event has already ended.")
+    pdf_bytes = build_ticket_pdf(ticket)
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = (
+        f'attachment; filename="eventmandu-ticket-{ticket.purchase_order_id}.pdf"'
+    )
+    return response
 
 
 @login_required
