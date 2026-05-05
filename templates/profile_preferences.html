@@ -158,6 +158,39 @@
                   />
                 </div>
                 <div class="col-md-6">
+                  <label for="ticket_holder_name" class="form-label">Ticket Holder Name</label>
+                  <input
+                    id="ticket_holder_name"
+                    name="ticket_holder_name"
+                    type="text"
+                    class="form-control"
+                    value="{{ profile.ticket_holder_name }}"
+                    placeholder="Name to show on tickets"
+                  />
+                </div>
+                <div class="col-md-6">
+                  <label for="phone_number" class="form-label">Phone Number</label>
+                  <input
+                    id="phone_number"
+                    name="phone_number"
+                    type="text"
+                    class="form-control"
+                    value="{{ profile.phone_number }}"
+                    placeholder="+977-98XXXXXXXX"
+                  />
+                </div>
+                <div class="col-12">
+                  <label for="timezone" class="form-label">Timezone</label>
+                  <select id="timezone" name="timezone" class="form-select">
+                    <option value="">Use system default (Asia/Kathmandu)</option>
+                    {% for tz in timezone_choices %}
+                    <option value="{{ tz }}" {% if profile.timezone == tz %}selected{% endif %}>
+                      {{ tz }}
+                    </option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="col-md-6">
                   <label for="favorite_category" class="form-label"
                     >Favorite Category</label
                   >

@@ -22,11 +22,13 @@ from django.urls import reverse
 from django.utils import timezone
 from django.db.models.functions import Coalesce
 from django.views.decorators.http import require_POST
+from zoneinfo import available_timezones
 from .models import AuditLog, Category, Event, TicketPurchase, UserPreference, UserRole, Venue
 from .recommendation import get_event_popularity_score, get_event_recommendation_data, get_recommended_events
 from .roles import get_user_role, role_required
 from .forms import OrganizerEventForm
 from .email_utils import build_ticket_pdf, send_ticket_email
+from accounts.models import UserProfile
 
 RESERVATION_HOLD_MINUTES = 15
 logger = logging.getLogger(__name__)
@@ -410,12 +412,25 @@ def recommended_events(request):
 def profile_preferences_view(request):
     categories = Category.objects.order_by("name")
     preferences, _ = UserPreference.objects.get_or_create(user=request.user)
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    timezone_choices = [
+        "Asia/Kathmandu",
+        "UTC",
+        "Asia/Kolkata",
+        "Europe/London",
+        "America/New_York",
+        "America/Los_Angeles",
+    ]
 
     if request.method == "POST":
         if request.POST.get("action") == "clear_preferences":
             preferences.favorite_category = None
             preferences.budget = None
             preferences.save(update_fields=["favorite_category", "budget", "updated_at"])
+            profile.ticket_holder_name = ""
+            profile.phone_number = ""
+            profile.timezone = ""
+            profile.save(update_fields=["ticket_holder_name", "phone_number", "timezone", "updated_at"])
             request.session.pop("preferred_category", None)
             request.session.pop("budget", None)
             request.session.modified = True
@@ -426,6 +441,15 @@ def profile_preferences_view(request):
         request.user.last_name = request.POST.get("last_name", "").strip()
         request.user.email = request.POST.get("email", "").strip()
         request.user.save(update_fields=["first_name", "last_name", "email"])
+
+        profile.ticket_holder_name = request.POST.get("ticket_holder_name", "").strip()
+        profile.phone_number = request.POST.get("phone_number", "").strip()
+        submitted_timezone = request.POST.get("timezone", "").strip()
+        if submitted_timezone and submitted_timezone not in available_timezones():
+            messages.error(request, "Please choose a valid timezone.")
+            return redirect("profile_preferences")
+        profile.timezone = submitted_timezone
+        profile.save()
 
         category_id = request.POST.get("favorite_category", "").strip()
         budget_raw = request.POST.get("budget", "").strip()
@@ -464,7 +488,7 @@ def profile_preferences_view(request):
     return render(
         request,
         "profile_preferences.html",
-        {"categories": categories, "preferences": preferences},
+        {"categories": categories, "preferences": preferences, "profile": profile, "timezone_choices": timezone_choices},
     )
 
 
@@ -782,26 +806,6 @@ def khalti_return(request):
                     "created_at": ticket.created_at,
                     "status": ticket.status,
                 }
-
-                merged_target = (
-                    TicketPurchase.objects.select_for_update()
-                    .filter(
-                        user=ticket.user,
-                        event=ticket.event,
-                        status=TicketPurchase.STATUS_COMPLETED,
-                    )
-                    .exclude(id=ticket.id)
-                    .order_by("created_at")
-                    .first()
-                )
-                if merged_target:
-                    merged_target.quantity = int(merged_target.quantity) + int(ticket.quantity)
-                    merged_target.total_amount = Decimal(merged_target.total_amount) + Decimal(ticket.total_amount)
-                    if ticket.khalti_txn_id:
-                        merged_target.khalti_txn_id = ticket.khalti_txn_id
-                    merged_target.save(update_fields=["quantity", "total_amount", "khalti_txn_id"])
-                    ticket.delete()
-                    ticket = merged_target
             try:
                 if not send_ticket_email(ticket, purchase_snapshot=ticket_email_snapshot):
                     messages.warning(

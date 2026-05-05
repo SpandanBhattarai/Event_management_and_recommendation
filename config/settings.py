@@ -53,7 +53,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'accounts',
+    'accounts.apps.AccountsConfig',
     'events',
 ]
 
@@ -151,5 +151,5 @@ EMAIL_BACKEND = os.environ.get(
     "django.core.mail.backends.smtp.EmailBackend" if EMAIL_HOST else "django.core.mail.backends.console.EmailBackend",
 )
 
-#KHALTI SECRET KEY
-KHALTI_SECRET_KEY = "cbddcbd8064a4ebf8117712470712923"
+# KHALTI SECRET KEY
+KHALTI_SECRET_KEY = os.environ.get("KHALTI_SECRET_KEY", "")

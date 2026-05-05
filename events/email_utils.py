@@ -45,8 +45,17 @@ def _ticket_details_lines(purchase):
 
 
 def _ticket_holder_name(user):
+    profile = getattr(user, "profile", None)
+    if profile and profile.ticket_holder_name:
+        return profile.ticket_holder_name
     full_name = f"{user.first_name} {user.last_name}".strip()
     return full_name or user.username
+
+
+def _user_timezone(user):
+    profile = getattr(user, "profile", None)
+    timezone_name = profile.timezone if profile and profile.timezone else settings.TIME_ZONE
+    return ZoneInfo(timezone_name)
 
 
 def _ticket_status_meta(status):
@@ -75,9 +84,10 @@ def build_ticket_context(purchase, purchase_snapshot=None):
     venue = event.venue
     user = purchase.user
     snapshot = purchase_snapshot or build_purchase_snapshot(purchase)
-    local_purchase_time = timezone.localtime(snapshot["created_at"])
-    local_start = timezone.localtime(event.start_date)
-    local_end = timezone.localtime(event.end_date)
+    user_tz = _user_timezone(user)
+    local_purchase_time = timezone.localtime(snapshot["created_at"], user_tz)
+    local_start = timezone.localtime(event.start_date, user_tz)
+    local_end = timezone.localtime(event.end_date, user_tz)
     status_label, status_color = _ticket_status_meta(snapshot["status"])
     total_amount = Decimal(snapshot["total_amount"])
     quantity = int(snapshot["quantity"])
@@ -97,7 +107,7 @@ def build_ticket_context(purchase, purchase_snapshot=None):
         "event_start": local_start,
         "event_end": local_end,
         "attendee_name": _ticket_holder_name(user),
-        "attendee_phone": getattr(user, "phone_number", "") or "Not provided",
+        "attendee_phone": (getattr(user, "profile", None).phone_number if getattr(user, "profile", None) else "") or "Not provided",
         "attendee_email": user.email or "Not provided",
         "ticket_rows": [
             {
@@ -121,11 +131,12 @@ def render_ticket_pdf_html(purchase, purchase_snapshot=None):
 
 def _build_ticket_email_body(purchase, purchase_snapshot=None):
     snapshot = purchase_snapshot or build_purchase_snapshot(purchase)
-    local_purchase_time = timezone.localtime(snapshot["created_at"])
-    local_start = timezone.localtime(purchase.event.start_date)
-    local_end = timezone.localtime(purchase.event.end_date)
+    user_tz = _user_timezone(purchase.user)
+    local_purchase_time = timezone.localtime(snapshot["created_at"], user_tz)
+    local_start = timezone.localtime(purchase.event.start_date, user_tz)
+    local_end = timezone.localtime(purchase.event.end_date, user_tz)
     lines = [
-        _ticket_salutation(snapshot["created_at"]),
+        _ticket_salutation(timezone.localtime(snapshot["created_at"], user_tz)),
         "",
         f"Hello {purchase.user.username}, please find your ticket details below:",
         "",

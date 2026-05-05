@@ -1,5 +1,6 @@
 import io
 from datetime import datetime, timedelta, timezone as dt_timezone
+from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.core import mail
@@ -8,7 +9,8 @@ from django.urls import reverse
 from django.utils import timezone
 from pypdf import PdfReader
 
-from .email_utils import render_ticket_pdf_html
+from accounts.models import UserProfile
+from .email_utils import build_ticket_context, render_ticket_pdf_html
 from .models import Category, Event, TicketPurchase, Venue
 
 
@@ -70,9 +72,9 @@ class TicketEmailTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
 
         email = mail.outbox[0]
-        self.assertEqual(email.subject, "Event tickets from EventMandu")
+        self.assertEqual(email.subject, "event tickets from eventmandu")
         self.assertIn("Good morning!", email.body)
-        self.assertIn("Hello Spandan, please find your ticket details below:", email.body)
+        self.assertIn("Hello sabin, please find your ticket details below:", email.body)
         self.assertIn("Thank you,\nEventMandu team", email.body)
         self.assertEqual(len(email.attachments), 1)
 
@@ -105,7 +107,7 @@ class TicketEmailTests(TestCase):
         self.assertIn("Standard Entry", html)
         self.assertIn("This is a digitally generated ticket.", html)
 
-    def test_email_uses_current_transaction_snapshot_when_purchase_is_merged(self):
+    def test_completed_purchases_remain_separate_transactions(self):
         older_purchase = TicketPurchase.objects.create(
             user=self.user,
             event=self.event,
@@ -132,9 +134,14 @@ class TicketEmailTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 302)
-        self.assertFalse(TicketPurchase.objects.filter(id=new_purchase.id).exists())
+        self.assertTrue(TicketPurchase.objects.filter(id=new_purchase.id).exists())
+        new_purchase.refresh_from_db()
+        self.assertEqual(new_purchase.status, TicketPurchase.STATUS_COMPLETED)
+        self.assertEqual(new_purchase.quantity, 2)
+        self.assertEqual(new_purchase.total_amount, Decimal("3000.00"))
         older_purchase.refresh_from_db()
-        self.assertEqual(older_purchase.quantity, 7)
+        self.assertEqual(older_purchase.quantity, 5)
+        self.assertEqual(older_purchase.total_amount, Decimal("7500.00"))
         self.assertEqual(len(mail.outbox), 1)
         email = mail.outbox[0]
         self.assertIn("Quantity: 2", email.body)
@@ -185,3 +192,25 @@ class TicketEmailTests(TestCase):
         response = self.client.get(reverse("ticket_pdf_download", args=[purchase.id]))
 
         self.assertEqual(response.status_code, 403)
+
+    def test_ticket_context_prefers_profile_fields_for_holder_phone_and_timezone(self):
+        profile = self.user.profile
+        profile.ticket_holder_name = "Sabin Shrestha"
+        profile.phone_number = "+977-9812345678"
+        profile.timezone = "Asia/Kathmandu"
+        profile.save()
+        purchase = TicketPurchase.objects.create(
+            user=self.user,
+            event=self.event,
+            quantity=1,
+            total_amount="1500.00",
+            status=TicketPurchase.STATUS_COMPLETED,
+            khalti_txn_id="txn-profile",
+            purchase_order_id="order-profile",
+        )
+
+        context = build_ticket_context(purchase)
+
+        self.assertEqual(context["attendee_name"], "Sabin Shrestha")
+        self.assertEqual(context["attendee_phone"], "+977-9812345678")
+        self.assertEqual(profile.timezone, "Asia/Kathmandu")

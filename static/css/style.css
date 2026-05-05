@@ -178,7 +178,7 @@ main.pt-4 {
 .hero-panel {
   border-radius: 28px;
   overflow: hidden;
-  background: url("/static/images/hero.jpg") center/cover no-repeat;
+  background: var(--primary);
   color: #ffffff;
   min-height: 470px;
   box-shadow: var(--shadow-card);
