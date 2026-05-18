@@ -31,6 +31,7 @@ from .email_utils import build_ticket_pdf, send_ticket_email
 from accounts.models import UserProfile
 
 RESERVATION_HOLD_MINUTES = 15
+POPULARITY_UI_BOOST_MULTIPLIER = 4
 logger = logging.getLogger(__name__)
 
 
@@ -75,6 +76,10 @@ def _can_book_event(user, event):
         return False, "Organizers cannot book their own events."
 
     return True, ""
+
+
+def _get_popularity_display_percent(popularity_score):
+    return min(99, round(popularity_score * 100 * POPULARITY_UI_BOOST_MULTIPLIER))
 
 
 def _get_similar_events(event, limit=3):
@@ -279,7 +284,9 @@ def events_view(request):
             "predicted_popularity_score",
             get_event_popularity_score(event),
         )
-        event.predicted_popularity_percent = round(event.predicted_popularity_score * 100)
+        event.predicted_popularity_percent = _get_popularity_display_percent(
+            event.predicted_popularity_score
+        )
 
     for event in recommended:
         event.predicted_popularity_score = getattr(
@@ -287,7 +294,9 @@ def events_view(request):
             "predicted_popularity_score",
             get_event_popularity_score(event),
         )
-        event.predicted_popularity_percent = round(event.predicted_popularity_score * 100)
+        event.predicted_popularity_percent = _get_popularity_display_percent(
+            event.predicted_popularity_score
+        )
 
     return render(
         request,
@@ -318,7 +327,7 @@ def event_detail(request, event_id):
     final_score = None
     final_score_percent = None
     predicted_popularity_score = get_event_popularity_score(event)
-    predicted_popularity_percent = round(predicted_popularity_score * 100)
+    predicted_popularity_percent = _get_popularity_display_percent(predicted_popularity_score)
     recommendation_reasons = []
     similar_events = _get_similar_events(event)
     event_revenue = None
@@ -562,7 +571,7 @@ def buy_ticket(request, event_id):
         )
 
         existing_hold_quantity = existing_hold.quantity if existing_hold else 0
-        merged_quantity = existing_hold_quantity + quantity
+        merged_quantity = quantity
 
         sold_quantity = (
             TicketPurchase.objects.filter(event=locked_event, status=TicketPurchase.STATUS_COMPLETED)

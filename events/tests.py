@@ -1,6 +1,8 @@
 import io
+import json
 from datetime import datetime, timedelta, timezone as dt_timezone
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core import mail
@@ -12,6 +14,13 @@ from pypdf import PdfReader
 from accounts.models import UserProfile
 from .email_utils import build_ticket_context, render_ticket_pdf_html
 from .models import Category, Event, TicketPurchase, Venue
+from .views import _get_popularity_display_percent
+
+
+class PopularityDisplayTests(TestCase):
+    def test_popularity_display_percent_is_boosted_and_capped(self):
+        self.assertEqual(_get_popularity_display_percent(0.4), 50)
+        self.assertEqual(_get_popularity_display_percent(1), 99)  
 
 
 @override_settings(
@@ -147,6 +156,58 @@ class TicketEmailTests(TestCase):
         self.assertIn("Quantity: 2", email.body)
         self.assertIn("Total Paid: NPR 3000.00", email.body)
         self.assertIn("Order ID: order-new", email.body)
+
+    @override_settings(KHALTI_SECRET_KEY="test-secret")
+    @patch("events.views.urllib_request.urlopen")
+    def test_reinitiating_active_khalti_hold_replaces_quantity(self, mock_urlopen):
+        class FakeKhaltiResponse:
+            def __init__(self, pidx):
+                self.pidx = pidx
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                return False
+
+            def read(self):
+                return json.dumps(
+                    {
+                        "payment_url": f"https://khalti.test/pay/{self.pidx}",
+                        "pidx": self.pidx,
+                    }
+                ).encode("utf-8")
+
+        mock_urlopen.side_effect = [
+            FakeKhaltiResponse("pidx-first"),
+            FakeKhaltiResponse("pidx-second"),
+        ]
+
+        self.client.force_login(self.user)
+
+        first_response = self.client.post(
+            reverse("buy_ticket", args=[self.event.id]),
+            {"ticket_quantity": "1", "payment_method": "khalti"},
+        )
+        second_response = self.client.post(
+            reverse("buy_ticket", args=[self.event.id]),
+            {"ticket_quantity": "1", "payment_method": "khalti"},
+        )
+
+        self.assertEqual(first_response.status_code, 302)
+        self.assertEqual(second_response.status_code, 302)
+        self.assertEqual(TicketPurchase.objects.filter(user=self.user, event=self.event).count(), 1)
+
+        purchase = TicketPurchase.objects.get(user=self.user, event=self.event)
+        self.assertEqual(purchase.quantity, 1)
+        self.assertEqual(purchase.total_amount, Decimal("1500.00"))
+        self.assertEqual(purchase.khalti_pidx, "pidx-second")
+
+        sent_amounts = [
+            json.loads(call.args[0].data.decode("utf-8"))["amount"]
+            for call in mock_urlopen.call_args_list
+        ]
+        self.assertEqual(sent_amounts, [150000, 150000])
 
     def test_ticket_owner_can_download_pdf_from_tickets_page_route(self):
         purchase = TicketPurchase.objects.create(

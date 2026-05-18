@@ -105,7 +105,7 @@ def get_recency_score(event, now=None, horizon_days=30):
         days_until_start= (event.start_date - now).total_seconds() / 86400
         return max(0.0, 1.0 - (days_until_start / horizon_days))
 
-
+#calculating the final score by combining all the individual scores with their respective weights
 def calculate_final_score(category_score, budget_score, distance_score, popularity_score, recency_score):
     return (
         (category_score * 0.30)
